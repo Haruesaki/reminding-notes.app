@@ -5,6 +5,7 @@ class ToneRefModel extends ToneRef {
     required super.id,
     required super.name,
     required super.relativePath,
+    super.contentUri,
   });
 
   factory ToneRefModel.fromJson(Map<String, dynamic> json) {
@@ -12,6 +13,7 @@ class ToneRefModel extends ToneRef {
       id: json['id'] as String? ?? '',
       name: json['name'] as String? ?? '',
       relativePath: json['relativePath'] as String? ?? '',
+      contentUri: json['contentUri'] as String?,
     );
   }
 
@@ -19,6 +21,7 @@ class ToneRefModel extends ToneRef {
         'id': id,
         'name': name,
         'relativePath': relativePath,
+        if (contentUri != null) 'contentUri': contentUri,
       };
 }
 

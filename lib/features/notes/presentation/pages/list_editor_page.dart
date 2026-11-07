@@ -6,9 +6,15 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../explorer/domain/entities/entities.dart';
+import '../../data/datasources/tones_local_data_source.dart';
+import '../../data/services/alarm_service.dart';
+import '../../data/services/notification_service.dart';
+import '../../data/services/permission_service.dart';
+import '../../domain/services/reminder_calculator.dart';
 import '../bloc/list_editor/list_editor_bloc.dart';
 import '../bloc/list_editor/list_editor_event.dart';
 import '../bloc/list_editor/list_editor_state.dart';
+import '../widgets/task_settings_dialog.dart';
 
 class ListEditorPage extends StatelessWidget {
   final String? noteId;
@@ -243,6 +249,9 @@ class _ListEditorViewState extends State<_ListEditorView>
     final bloc = context.read<ListEditorBloc>();
     bloc.add(DeleteListTask(task.id));
     _scheduleAutoSave();
+    if (task.deadline != null) {
+      sl<NotificationService>().cancelTaskReminders(task.id);
+    }
 
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -256,6 +265,9 @@ class _ListEditorViewState extends State<_ListEditorView>
           onPressed: () {
             bloc.add(RestoreListTask(index: index, task: task));
             _scheduleAutoSave();
+            if (task.deadline != null) {
+              _scheduleReminderIfPresent(task);
+            }
           },
         ),
       ),
@@ -594,6 +606,14 @@ class _ListEditorViewState extends State<_ListEditorView>
                         onChanged: (val) {
                           bloc.add(ToggleListTaskDone(task.id));
                           _scheduleAutoSave();
+                          if (task.deadline != null) {
+                            if (!task.done) {
+                              sl<NotificationService>().cancelTaskReminders(task.id);
+                            } else {
+                              final updatedTask = task.copyWith(done: false);
+                              _scheduleReminderIfPresent(updatedTask);
+                            }
+                          }
                         },
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(5),
@@ -604,62 +624,69 @@ class _ListEditorViewState extends State<_ListEditorView>
                     ),
                     const SizedBox(width: 8),
 
-                    // Inline Editable Text
+                    // Inline Editable Text & Deadline Badge
                     Expanded(
-                      child: TextField(
-                        key: Key('task_text_${task.id}'),
-                        controller: controller,
-                        focusNode: focusNode,
-                        maxLines: null,
-                        style: TextStyle(
-                          fontSize: 16,
-                          color: task.done
-                              ? AppColors.textSecondary
-                              : AppColors.textPrimary,
-                          decoration: task.done
-                              ? TextDecoration.lineThrough
-                              : TextDecoration.none,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Tulis tugas...',
-                          hintStyle: TextStyle(
-                            fontSize: 16,
-                            color: Color(0xFFCCCCCC),
-                          ),
-                          border: InputBorder.none,
-                          isDense: true,
-                          contentPadding: EdgeInsets.symmetric(vertical: 6),
-                        ),
-                        onChanged: (val) {
-                          bloc.add(UpdateListTaskText(
-                            taskId: task.id,
-                            newText: val,
-                          ));
-                          _scheduleAutoSave();
-                        },
-                        onSubmitted: (val) {
-                          if (val.trim().isEmpty) {
-                            bloc.add(DeleteListTask(task.id));
-                            _scheduleAutoSave();
-                          } else {
-                            bloc.add(AddListTask(afterTaskId: task.id));
-                            _scheduleAutoSave();
-                            WidgetsBinding.instance.addPostFrameCallback((_) {
-                              final currentState = bloc.state;
-                              if (currentState is ListEditorLoaded) {
-                                final idx = currentState.listFile.tasks
-                                    .indexWhere((t) => t.id == task.id);
-                                if (idx != -1 &&
-                                    idx + 1 <
-                                        currentState.listFile.tasks.length) {
-                                  final nextTask =
-                                      currentState.listFile.tasks[idx + 1];
-                                  _getFocusNode(nextTask.id).requestFocus();
-                                }
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          TextField(
+                            key: Key('task_text_${task.id}'),
+                            controller: controller,
+                            focusNode: focusNode,
+                            maxLines: null,
+                            style: TextStyle(
+                              fontSize: 16,
+                              color: task.done
+                                  ? AppColors.textSecondary
+                                  : AppColors.textPrimary,
+                              decoration: task.done
+                                  ? TextDecoration.lineThrough
+                                  : TextDecoration.none,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'Tulis tugas...',
+                              hintStyle: TextStyle(
+                                fontSize: 16,
+                                color: Color(0xFFCCCCCC),
+                              ),
+                              border: InputBorder.none,
+                              isDense: true,
+                              contentPadding: EdgeInsets.symmetric(vertical: 6),
+                            ),
+                            onChanged: (val) {
+                              bloc.add(UpdateListTaskText(
+                                taskId: task.id,
+                                newText: val,
+                              ));
+                              _scheduleAutoSave();
+                            },
+                            onSubmitted: (val) {
+                              if (val.trim().isEmpty) {
+                                bloc.add(DeleteListTask(task.id));
+                                _scheduleAutoSave();
+                              } else {
+                                bloc.add(AddListTask(afterTaskId: task.id));
+                                _scheduleAutoSave();
+                                WidgetsBinding.instance.addPostFrameCallback((_) {
+                                  final currentState = bloc.state;
+                                  if (currentState is ListEditorLoaded) {
+                                    final idx = currentState.listFile.tasks
+                                        .indexWhere((t) => t.id == task.id);
+                                    if (idx != -1 &&
+                                        idx + 1 <
+                                            currentState.listFile.tasks.length) {
+                                      final nextTask =
+                                          currentState.listFile.tasks[idx + 1];
+                                      _getFocusNode(nextTask.id).requestFocus();
+                                    }
+                                  }
+                                });
                               }
-                            });
-                          }
-                        },
+                            },
+                          ),
+                          if (task.deadline != null) _buildDeadlineBadge(task),
+                        ],
                       ),
                     ),
 
@@ -726,7 +753,7 @@ class _ListEditorViewState extends State<_ListEditorView>
                             }
                           });
                         } else if (val == 'settings') {
-                          _showTaskSettingsPlaceholder(context, task);
+                          _openTaskSettings(task);
                         } else if (val == 'delete') {
                           _deleteTaskWithUndo(taskIndex, task);
                         }
@@ -914,66 +941,147 @@ class _ListEditorViewState extends State<_ListEditorView>
     );
   }
 
-  void _showTaskSettingsPlaceholder(BuildContext context, Task task) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+  Widget _buildDeadlineBadge(Task task) {
+    final dl = task.deadline;
+    if (dl == null) return const SizedBox.shrink();
+
+    final now = DateTime.now();
+    final status = ReminderCalculator.getDeadlineBadgeStatus(dl.at, now);
+    final badgeText = ReminderCalculator.formatDeadlineBadge(dl.at);
+
+    Color bg;
+    Color fg;
+    Color border;
+
+    switch (status) {
+      case DeadlineBadgeStatus.urgent:
+        bg = const Color(0xFFFEE2E2);
+        fg = const Color(0xFFDC2626);
+        border = const Color(0xFFFCA5A5);
+        break;
+      case DeadlineBadgeStatus.neutral:
+        bg = const Color(0xFFF3F4F6);
+        fg = const Color(0xFF4B5563);
+        border = const Color(0xFFD1D5DB);
+        break;
+      case DeadlineBadgeStatus.relaxed:
+        bg = const Color(0xFFDCFCE7);
+        fg = const Color(0xFF16A34A);
+        border = const Color(0xFF86EFAC);
+        break;
+    }
+
+    return InkWell(
+      key: Key('deadline_badge_${task.id}'),
+      onTap: () => _openTaskSettings(task),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(top: 2, bottom: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: border, width: 0.8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.access_time_filled_rounded, size: 12, color: fg),
+            const SizedBox(width: 4),
+            Text(
+              badgeText,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+            ),
+          ],
+        ),
       ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.settings_outlined, size: 24),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Pengaturan Tugas',
-                      style: Theme.of(ctx).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  task.text.isEmpty ? 'Tugas tanpa teks' : task.text,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Fitur Deadline, Nada notifikasi, dan Alarm akan diimplementasikan pada Milestone M6.',
-                  style: TextStyle(color: AppColors.textSecondary),
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF111111),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                    onPressed: () => Navigator.of(ctx).pop(),
-                    child: const Text('Mengerti'),
-                  ),
-                ),
-              ],
+    );
+  }
+
+  Future<void> _scheduleReminderIfPresent(Task task) async {
+    final bloc = context.read<ListEditorBloc>();
+    final state = bloc.state;
+    if (state is! ListEditorLoaded) return;
+    if (task.deadline == null) return;
+
+    ToneRef? tone;
+    final toneId = task.deadline?.notificationToneId;
+    if (toneId != null) {
+      tone = await sl<TonesLocalDataSource>().getToneById(toneId);
+    }
+
+    await sl<NotificationService>().scheduleTaskReminders(
+      task: task,
+      fileTitle: state.listFile.title,
+      fileId: state.listFile.id,
+      tone: tone,
+    );
+  }
+
+  Future<void> _openTaskSettings(Task task) async {
+    final bloc = context.read<ListEditorBloc>();
+    final result = await TaskSettingsDialog.show(context, task: task);
+    if (result == null || !mounted) return;
+
+    if (result.deadlineModified && result.task.deadline != null) {
+      final granted =
+          await sl<PermissionService>().requestNotificationPermission();
+      if (!mounted) return;
+      if (!granted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Izin notifikasi tidak diberikan. Pengingat mungkin tidak muncul.',
             ),
           ),
         );
-      },
-    );
+      }
+    }
+
+    if (result.task.deadline != null) {
+      await _scheduleReminderIfPresent(result.task);
+    } else if (result.deadlineModified) {
+      await sl<NotificationService>().cancelTaskReminders(result.task.id);
+    }
+
+    if (result.alarmModified &&
+        result.task.alarm != null &&
+        result.task.alarm!.enabled) {
+      String? ringtoneUri;
+      if (result.task.alarm?.toneId != null) {
+        final tone = await sl<TonesLocalDataSource>()
+            .getToneById(result.task.alarm!.toneId!);
+        ringtoneUri = tone?.contentUri;
+      }
+
+      final res = await sl<AlarmService>().createAlarm(
+        scheduledTime: result.task.alarm!.at,
+        message:
+            result.task.text.isNotEmpty ? result.task.text : 'Pengingat Tugas',
+        ringtoneUri: ringtoneUri,
+      );
+      if (!mounted) return;
+      if (res == AlarmResult.success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Alarm berhasil dibuat di aplikasi Jam'),
+          ),
+        );
+      } else if (res == AlarmResult.failedNoClockApp) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Tidak dapat membuka aplikasi Jam ponsel'),
+          ),
+        );
+      }
+    }
+
+    if (!mounted) return;
+    bloc.add(UpdateTaskSettings(result.task));
+    _scheduleAutoSave();
   }
 }

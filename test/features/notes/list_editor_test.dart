@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:reminding/core/di/injection_container.dart';
 import 'package:reminding/features/explorer/domain/entities/entities.dart';
 import 'package:reminding/features/notes/presentation/pages/list_editor_page.dart';
@@ -12,6 +13,10 @@ void main() {
 
   late Directory tempDir;
   late Directory tempSupportDir;
+
+  setUpAll(() async {
+    await initializeDateFormatting('id_ID', null);
+  });
 
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('list_editor_test_');
@@ -364,5 +369,40 @@ void main() {
     // Verifikasi snackbar Disalin muncul
     expect(find.text('Disalin'), findsOneWidget);
     await tester.pumpAndSettle();
+  });
+
+  testWidgets('lencana deadline menampilkan badge pada item task', (tester) async {
+    final deadlineTime = DateTime.now().add(const Duration(days: 1));
+    final initialList = ListFile(
+      id: 'list_deadline_badge',
+      relativePath: 'list_deadline_badge.json',
+      title: 'Target Deadline',
+      colorIndex: 0,
+      favoritedAt: null,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      tasks: [
+        Task(
+          id: 't_dl',
+          text: 'Kerjakan Tugas KP',
+          done: false,
+          deadline: DeadlineSettings(
+            at: deadlineTime,
+            remindStartDaysBefore: 1,
+            remindTimes: const ['09:00'],
+          ),
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: ListEditorPage(initialList: initialList),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final badgeFinder = find.byKey(const Key('deadline_badge_t_dl'));
+    expect(badgeFinder, findsOneWidget);
   });
 }

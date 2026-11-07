@@ -61,7 +61,9 @@ class Task extends Equatable {
     bool? collapsed,
     List<Subtask>? subtasks,
     DeadlineSettings? deadline,
+    bool clearDeadline = false,
     AlarmSettings? alarm,
+    bool clearAlarm = false,
     Map<String, dynamic>? extras,
   }) {
     return Task(
@@ -70,8 +72,8 @@ class Task extends Equatable {
       done: done ?? this.done,
       collapsed: collapsed ?? this.collapsed,
       subtasks: subtasks ?? this.subtasks,
-      deadline: deadline ?? this.deadline,
-      alarm: alarm ?? this.alarm,
+      deadline: clearDeadline ? null : (deadline ?? this.deadline),
+      alarm: clearAlarm ? null : (alarm ?? this.alarm),
       extras: extras ?? this.extras,
     );
   }

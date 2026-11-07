@@ -20,13 +20,16 @@ class DeadlineSettings extends Equatable {
     int? remindStartDaysBefore,
     List<String>? remindTimes,
     String? notificationToneId,
+    bool clearNotificationToneId = false,
     Map<String, dynamic>? extras,
   }) {
     return DeadlineSettings(
       at: at ?? this.at,
       remindStartDaysBefore: remindStartDaysBefore ?? this.remindStartDaysBefore,
       remindTimes: remindTimes ?? this.remindTimes,
-      notificationToneId: notificationToneId ?? this.notificationToneId,
+      notificationToneId: clearNotificationToneId
+          ? null
+          : (notificationToneId ?? this.notificationToneId),
       extras: extras ?? this.extras,
     );
   }

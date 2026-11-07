@@ -27,6 +27,7 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
     on<ToggleListPinInEditor>(_onTogglePin);
     on<SaveListEvent>(_onSaveList);
     on<DiscardEmptyListEvent>(_onDiscardEmptyList);
+    on<UpdateTaskSettings>(_onUpdateTaskSettings);
   }
 
   Future<void> _onInitializeList(
@@ -320,6 +321,25 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
 
     emit(current.copyWith(
       listFile: current.listFile.copyWith(tasks: newTasks),
+      isDirty: true,
+    ));
+  }
+
+  void _onUpdateTaskSettings(
+    UpdateTaskSettings event,
+    Emitter<ListEditorState> emit,
+  ) {
+    if (state is! ListEditorLoaded) return;
+    final current = state as ListEditorLoaded;
+    final updatedTasks = current.listFile.tasks.map((task) {
+      if (task.id == event.updatedTask.id) {
+        return event.updatedTask;
+      }
+      return task;
+    }).toList();
+
+    emit(current.copyWith(
+      listFile: current.listFile.copyWith(tasks: updatedTasks),
       isDirty: true,
     ));
   }

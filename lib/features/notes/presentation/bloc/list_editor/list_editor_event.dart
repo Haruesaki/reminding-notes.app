@@ -134,3 +134,12 @@ class SaveListEvent extends ListEditorEvent {
 class DiscardEmptyListEvent extends ListEditorEvent {
   const DiscardEmptyListEvent();
 }
+
+class UpdateTaskSettings extends ListEditorEvent {
+  final Task updatedTask;
+
+  const UpdateTaskSettings(this.updatedTask);
+
+  @override
+  List<Object?> get props => [updatedTask];
+}

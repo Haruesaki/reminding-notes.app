@@ -17,12 +17,13 @@ class AlarmSettings extends Equatable {
     bool? enabled,
     DateTime? at,
     String? toneId,
+    bool clearToneId = false,
     Map<String, dynamic>? extras,
   }) {
     return AlarmSettings(
       enabled: enabled ?? this.enabled,
       at: at ?? this.at,
-      toneId: toneId ?? this.toneId,
+      toneId: clearToneId ? null : (toneId ?? this.toneId),
       extras: extras ?? this.extras,
     );
   }

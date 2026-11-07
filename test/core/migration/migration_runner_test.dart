@@ -87,7 +87,7 @@ void main() {
         },
       );
 
-      expect(
+      await expectLater(
         () => runner.migrateDirectory(tempDir),
         throwsA(isA<MigrationFailedException>()),
       );
