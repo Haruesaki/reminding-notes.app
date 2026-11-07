@@ -1,30 +1,50 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:reminding/main.dart';
+import 'package:reminding/app.dart';
+import 'package:reminding/core/database/app_database.dart';
+import 'package:reminding/core/di/injection_container.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  TestWidgetsFlutterBinding.ensureInitialized();
+  sqfliteFfiInit();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  setUp(() async {
+    final db = await AppDatabase.initDatabase(
+      factory: databaseFactoryFfi,
+      overridePath: inMemoryDatabasePath,
+    );
+    await initDependencies(overrideDb: db);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+  tearDown(() async {
+    await sl.reset();
+  });
+
+  testWidgets('RemindingApp boots and displays Home screen components', (tester) async {
+    await tester.pumpWidget(const RemindingApp());
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    // Allow SQLite FFI async query to complete on real async event loop
+    await tester.runAsync(() async {
+      await Future.delayed(const Duration(milliseconds: 200));
+    });
+    await tester.pump();
+
+    // Verify Greeting
+    expect(find.text('Hi, Andrea 👋'), findsOneWidget);
+
+    // Verify Search bar
+    expect(find.text('Search notes...'), findsOneWidget);
+
+    // Verify Filter Chip
+    expect(find.text('All Notes'), findsOneWidget);
+
+    // Verify Empty State when no notes exist
+    expect(find.text('No notes here'), findsOneWidget);
+
+    // Verify FAB
+    expect(find.byType(FloatingActionButton), findsOneWidget);
   });
 }
+
