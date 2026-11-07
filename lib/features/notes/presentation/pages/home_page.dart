@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
+import 'package:reminding/features/explorer/domain/entities/entities.dart';
 import '../bloc/note_list/note_list_bloc.dart';
 import '../bloc/note_list/note_list_event.dart';
 import '../bloc/note_list/note_list_state.dart';
@@ -26,7 +27,7 @@ class HomePage extends StatelessWidget {
             DateTime? selectedDate;
             String searchQuery = '';
             String? selectedCategory;
-            List notes = [];
+            List<FileEntry> notes = [];
             bool isLoading = state is NoteListLoading;
 
             if (state is NoteListLoaded) {
@@ -131,7 +132,7 @@ class HomePage extends StatelessWidget {
                                         context.read<NoteListBloc>().add(
                                               TogglePinEvent(
                                                 note.id,
-                                                !note.isPinned,
+                                                !note.isFavorite,
                                               ),
                                             );
                                       },

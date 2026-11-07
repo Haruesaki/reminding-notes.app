@@ -1,12 +1,12 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart';
-import '../../../domain/entities/note.dart';
-import '../../../domain/repositories/note_repository.dart';
+import 'package:reminding/features/explorer/domain/entities/entities.dart';
+import 'package:reminding/features/explorer/domain/repositories/explorer_repository.dart';
 import 'note_editor_event.dart';
 import 'note_editor_state.dart';
 
 class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
-  final NoteRepository repository;
+  final ExplorerRepository repository;
   final Uuid _uuid = const Uuid();
 
   NoteEditorBloc({required this.repository}) : super(NoteEditorInitial()) {
@@ -25,22 +25,27 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
     emit(NoteEditorLoading());
     try {
       if (event.noteId != null) {
-        final existing = await repository.getNoteById(event.noteId!);
-        if (existing != null) {
-          emit(NoteEditorLoaded(
-            note: existing,
-            isNew: false,
-            isDirty: false,
-          ));
-          return;
+        final contents = await repository.getFolderContents('');
+        for (final entry in contents) {
+          if (entry.id == event.noteId && entry is PageFile) {
+            emit(NoteEditorLoaded(
+              note: entry,
+              isNew: false,
+              isDirty: false,
+            ));
+            return;
+          }
         }
       }
 
       final now = DateTime.now();
-      final freshNote = Note(
+      final freshNote = PageFile(
         id: _uuid.v4(),
+        relativePath: '',
         title: '',
-        content: '',
+        plainText: '',
+        colorIndex: 0,
+        favoritedAt: null,
         createdAt: now,
         updatedAt: now,
       );
@@ -78,7 +83,11 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
       final current = state as NoteEditorLoaded;
       emit(current.copyWith(
         note: current.note.copyWith(
-          content: event.content,
+          plainText: event.content,
+          content: [
+            {'insert': event.content},
+            {'insert': '\n'}
+          ],
           updatedAt: DateTime.now(),
         ),
         isDirty: true,
@@ -92,17 +101,16 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
   ) async {
     if (state is NoteEditorLoaded) {
       final current = state as NoteEditorLoaded;
-      // Do not save empty notes
-      if (current.note.title.trim().isEmpty && current.note.content.trim().isEmpty) {
+      if (current.note.title.trim().isEmpty && current.note.plainText.trim().isEmpty) {
         return;
       }
 
       emit(current.copyWith(isSaving: true));
       try {
         final toSave = current.note.copyWith(updatedAt: DateTime.now());
-        await repository.saveNote(toSave);
+        final saved = await repository.savePage(toSave);
         emit(current.copyWith(
-          note: toSave,
+          note: saved,
           isSaving: false,
           isDirty: false,
           isNew: false,
@@ -119,12 +127,14 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
   ) async {
     if (state is NoteEditorLoaded) {
       final current = state as NoteEditorLoaded;
-      final updated = current.note.copyWith(
-        isPinned: !current.note.isPinned,
-        updatedAt: DateTime.now(),
-      );
-      await repository.saveNote(updated);
-      emit(current.copyWith(note: updated, isDirty: false));
+      try {
+        final updated = await repository.toggleFavorite(current.note);
+        if (updated is PageFile) {
+          emit(current.copyWith(note: updated, isDirty: false));
+        }
+      } catch (e) {
+        emit(NoteEditorError(e.toString()));
+      }
     }
   }
 
@@ -132,15 +142,6 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
     SetReminderInEditor event,
     Emitter<NoteEditorState> emit,
   ) {
-    if (state is NoteEditorLoaded) {
-      final current = state as NoteEditorLoaded;
-      emit(current.copyWith(
-        note: current.note.copyWith(
-          reminderAt: event.reminderAt,
-          updatedAt: DateTime.now(),
-        ),
-        isDirty: true,
-      ));
-    }
+    // PRD M1 removed reminderAt, keep as no-op for backward UI compat
   }
 }

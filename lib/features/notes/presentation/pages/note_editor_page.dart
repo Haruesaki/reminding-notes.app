@@ -182,10 +182,10 @@ class _NoteEditorViewState extends State<_NoteEditorView> {
           if (_titleController.text != state.note.title && !_titleController.value.composing.isValid) {
             _titleController.text = state.note.title;
           }
-          if (_contentController.text != state.note.content && !_contentController.value.composing.isValid) {
-            _contentController.text = state.note.content;
+          if (_contentController.text != state.note.plainText && !_contentController.value.composing.isValid) {
+            _contentController.text = state.note.plainText;
             if (_undoHistory.isEmpty) {
-              _undoHistory.add(state.note.content);
+              _undoHistory.add(state.note.plainText);
             }
           }
         }
@@ -216,9 +216,9 @@ class _NoteEditorViewState extends State<_NoteEditorView> {
 
         final loaded = state as NoteEditorLoaded;
         final note = loaded.note;
-        final wordsCount = note.content.trim().isEmpty
+        final wordsCount = note.plainText.trim().isEmpty
             ? 0
-            : note.content.trim().split(RegExp(r'\s+')).length;
+            : note.plainText.trim().split(RegExp(r'\s+')).length;
         final updatedFormatted = DateFormat('MMM d, h:mm a').format(note.updatedAt);
 
         return PopScope(
@@ -276,11 +276,11 @@ class _NoteEditorViewState extends State<_NoteEditorView> {
                             // Pin toggle
                             IconButton(
                               icon: Icon(
-                                note.isPinned ? Icons.push_pin : Icons.push_pin_outlined,
-                                color: note.isPinned ? AppColors.textPrimary : AppColors.textSecondary,
+                                note.isFavorite ? Icons.favorite : Icons.favorite_border,
+                                color: note.isFavorite ? AppColors.textPrimary : AppColors.textSecondary,
                                 size: 20,
                               ),
-                              tooltip: note.isPinned ? 'Unpin' : 'Pin',
+                              tooltip: note.isFavorite ? 'Unfavorite' : 'Favorite',
                               onPressed: () {
                                 context.read<NoteEditorBloc>().add(const TogglePinInEditor());
                               },

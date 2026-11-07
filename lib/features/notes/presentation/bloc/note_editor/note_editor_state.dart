@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import '../../../domain/entities/note.dart';
+import 'package:reminding/features/explorer/domain/entities/entities.dart';
 
 abstract class NoteEditorState extends Equatable {
   const NoteEditorState();
@@ -13,7 +13,7 @@ class NoteEditorInitial extends NoteEditorState {}
 class NoteEditorLoading extends NoteEditorState {}
 
 class NoteEditorLoaded extends NoteEditorState {
-  final Note note;
+  final PageFile note;
   final bool isNew;
   final bool isSaving;
   final bool isDirty;
@@ -26,7 +26,7 @@ class NoteEditorLoaded extends NoteEditorState {
   });
 
   NoteEditorLoaded copyWith({
-    Note? note,
+    PageFile? note,
     bool? isNew,
     bool? isSaving,
     bool? isDirty,

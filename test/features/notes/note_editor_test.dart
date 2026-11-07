@@ -1,25 +1,33 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:reminding/core/database/app_database.dart';
 import 'package:reminding/core/di/injection_container.dart';
 import 'package:reminding/features/notes/presentation/pages/note_editor_page.dart';
 import 'package:reminding/features/notes/presentation/widgets/formatting_toolbar.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  sqfliteFfiInit();
+
+  late Directory tempDir;
+  late Directory tempSupportDir;
 
   setUp(() async {
-    final db = await AppDatabase.initDatabase(
-      factory: databaseFactoryFfi,
-      overridePath: inMemoryDatabasePath,
+    tempDir = await Directory.systemTemp.createTemp('note_editor_test_');
+    tempSupportDir = await Directory.systemTemp.createTemp('note_editor_support_test_');
+    await initDependencies(
+      overrideNotesDir: tempDir,
+      overrideSupportDir: tempSupportDir,
     );
-    await initDependencies(overrideDb: db);
   });
 
   tearDown(() async {
     await sl.reset();
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+    if (await tempSupportDir.exists()) {
+      await tempSupportDir.delete(recursive: true);
+    }
   });
 
   testWidgets('NoteEditorPage renders title, content, toolbar and supports formatting', (tester) async {

@@ -3,10 +3,10 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
-import '../../domain/entities/note.dart';
+import 'package:reminding/features/explorer/domain/entities/entities.dart';
 
 class NoteCard extends StatelessWidget {
-  final Note note;
+  final FileEntry note;
   final int index;
   final VoidCallback onTap;
   final VoidCallback? onTogglePin;
@@ -25,6 +25,14 @@ class NoteCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final bgColor = AppColors.cardColor(index);
     final dateString = DateFormat('MMM d, yyyy').format(note.updatedAt);
+    final String contentText;
+    if (note is PageFile) {
+      contentText = (note as PageFile).plainText;
+    } else if (note is ListFile) {
+      contentText = (note as ListFile).tasks.map((t) => t.text).join(' • ');
+    } else {
+      contentText = '';
+    }
 
     return Dismissible(
       key: Key(note.id),
@@ -61,12 +69,12 @@ class NoteCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  if (note.isPinned) ...[
+                  if (note.isFavorite) ...[
                     const SizedBox(width: 6),
                     GestureDetector(
                       onTap: onTogglePin,
                       child: const Icon(
-                        Icons.push_pin,
+                        Icons.favorite,
                         size: 16,
                         color: AppColors.textPrimary,
                       ),
@@ -75,9 +83,9 @@ class NoteCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              if (note.content.isNotEmpty)
+              if (contentText.isNotEmpty)
                 Text(
-                  note.content,
+                  contentText,
                   style: AppTypography.cardBody,
                   maxLines: 3,
                   overflow: TextOverflow.ellipsis,
@@ -93,25 +101,6 @@ class NoteCard extends StatelessWidget {
                       fontSize: 11,
                     ),
                   ),
-                  if (note.category != null && note.category!.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        note.category!,
-                        style: AppTypography.caption.copyWith(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ],

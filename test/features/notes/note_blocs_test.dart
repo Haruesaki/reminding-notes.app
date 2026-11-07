@@ -1,35 +1,44 @@
+import 'dart:io';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:reminding/core/database/app_database.dart';
-import 'package:reminding/features/notes/data/datasources/note_local_data_source.dart';
-import 'package:reminding/features/notes/data/repositories/note_repository_impl.dart';
-import 'package:reminding/features/notes/domain/entities/note.dart';
+import 'package:reminding/features/explorer/data/datasources/local_storage_data_source.dart';
+import 'package:reminding/features/explorer/data/datasources/notes_index_manager.dart';
+import 'package:reminding/features/explorer/data/repositories/explorer_repository_impl.dart';
+import 'package:reminding/features/explorer/domain/entities/entities.dart';
 import 'package:reminding/features/notes/presentation/bloc/note_editor/note_editor_bloc.dart';
 import 'package:reminding/features/notes/presentation/bloc/note_editor/note_editor_event.dart';
 import 'package:reminding/features/notes/presentation/bloc/note_editor/note_editor_state.dart';
 import 'package:reminding/features/notes/presentation/bloc/note_list/note_list_bloc.dart';
 import 'package:reminding/features/notes/presentation/bloc/note_list/note_list_event.dart';
 import 'package:reminding/features/notes/presentation/bloc/note_list/note_list_state.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  sqfliteFfiInit();
 
-  late Database db;
-  late NoteRepositoryImpl repository;
+  late Directory tempDir;
+  late Directory tempSupportDir;
+  late LocalStorageDataSource localDataSource;
+  late ExplorerRepositoryImpl repository;
 
   setUp(() async {
-    db = await AppDatabase.initDatabase(
-      factory: databaseFactoryFfi,
-      overridePath: inMemoryDatabasePath,
+    tempDir = await Directory.systemTemp.createTemp('note_blocs_test_');
+    tempSupportDir = await Directory.systemTemp.createTemp('note_blocs_support_test_');
+    final indexManager = NotesIndexManager(supportDir: tempSupportDir);
+    localDataSource = LocalStorageDataSource(
+      rootDir: tempDir,
+      indexManager: indexManager,
     );
-    final localDataSource = NoteLocalDataSourceImpl(db);
-    repository = NoteRepositoryImpl(localDataSource);
+    await localDataSource.init();
+    repository = ExplorerRepositoryImpl(localDataSource: localDataSource);
   });
 
   tearDown(() async {
-    await db.close();
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+    if (await tempSupportDir.exists()) {
+      await tempSupportDir.delete(recursive: true);
+    }
   });
 
   group('NoteListBloc', () {
@@ -43,6 +52,7 @@ void main() {
       'emits [NoteListLoading, NoteListLoaded] when LoadNotes is added',
       build: () => NoteListBloc(repository: repository),
       act: (bloc) => bloc.add(const LoadNotes()),
+      wait: const Duration(milliseconds: 100),
       expect: () => [
         isA<NoteListLoading>(),
         isA<NoteListLoaded>().having((s) => s.notes, 'notes', isEmpty),
@@ -54,10 +64,13 @@ void main() {
       build: () => NoteListBloc(repository: repository),
       setUp: () async {
         final now = DateTime.now();
-        await repository.saveNote(Note(
-          id: 'n1',
+        await repository.savePage(PageFile(
+          id: 'p1',
+          relativePath: 'Design Review.json',
           title: 'Design Review',
-          content: 'Figma review meeting',
+          plainText: 'Figma review meeting',
+          colorIndex: 0,
+          favoritedAt: null,
           createdAt: now,
           updatedAt: now,
         ));
@@ -88,12 +101,13 @@ void main() {
       await Future.delayed(const Duration(milliseconds: 50));
 
       bloc.add(const SaveNoteEvent());
-      await Future.delayed(const Duration(milliseconds: 50));
+      await Future.delayed(const Duration(milliseconds: 150));
 
-      final all = await repository.getNotes();
-      expect(all.length, 1);
-      expect(all.first.title, 'Grocery Shopping');
-      expect(all.first.content, 'Apples, Milk, Bread');
+      final all = await repository.getFolderContents('');
+      final files = all.whereType<PageFile>().toList();
+      expect(files.length, 1);
+      expect(files.first.title, 'Grocery Shopping');
+      expect(files.first.plainText, 'Apples, Milk, Bread');
 
       await bloc.close();
     });

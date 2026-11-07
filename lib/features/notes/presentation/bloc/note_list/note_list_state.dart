@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import '../../../domain/entities/note.dart';
+import 'package:reminding/features/explorer/domain/entities/entities.dart';
 
 abstract class NoteListState extends Equatable {
   const NoteListState();
@@ -13,7 +13,7 @@ class NoteListInitial extends NoteListState {}
 class NoteListLoading extends NoteListState {}
 
 class NoteListLoaded extends NoteListState {
-  final List<Note> notes;
+  final List<FileEntry> notes;
   final DateTime? selectedDate;
   final String searchQuery;
   final String? selectedCategory;
@@ -26,7 +26,7 @@ class NoteListLoaded extends NoteListState {
   });
 
   NoteListLoaded copyWith({
-    List<Note>? notes,
+    List<FileEntry>? notes,
     DateTime? Function()? selectedDate,
     String? searchQuery,
     String? Function()? selectedCategory,

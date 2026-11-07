@@ -1,35 +1,42 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reminding/app.dart';
-import 'package:reminding/core/database/app_database.dart';
 import 'package:reminding/core/di/injection_container.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  sqfliteFfiInit();
+
+  late Directory tempDir;
+  late Directory tempSupportDir;
 
   setUp(() async {
-    final db = await AppDatabase.initDatabase(
-      factory: databaseFactoryFfi,
-      overridePath: inMemoryDatabasePath,
+    tempDir = await Directory.systemTemp.createTemp('widget_test_');
+    tempSupportDir = await Directory.systemTemp.createTemp('widget_support_test_');
+    await initDependencies(
+      overrideNotesDir: tempDir,
+      overrideSupportDir: tempSupportDir,
     );
-    await initDependencies(overrideDb: db);
   });
 
   tearDown(() async {
     await sl.reset();
+    if (await tempDir.exists()) {
+      await tempDir.delete(recursive: true);
+    }
+    if (await tempSupportDir.exists()) {
+      await tempSupportDir.delete(recursive: true);
+    }
   });
 
   testWidgets('RemindingApp boots and displays Home screen components', (tester) async {
     await tester.pumpWidget(const RemindingApp());
     await tester.pump();
 
-    // Allow SQLite FFI async query to complete on real async event loop
     await tester.runAsync(() async {
-      await Future.delayed(const Duration(milliseconds: 200));
+      await Future.delayed(const Duration(milliseconds: 300));
     });
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
 
     // Verify Greeting
     expect(find.text('Hi, Andrea 👋'), findsOneWidget);
