@@ -188,8 +188,8 @@ class LocalStorageDataSource {
 
     // Dapatkan daftar file di folder untuk collision check
     final existingFileNames = <String>[];
-    if (await dir.exists()) {
-      await for (final e in dir.list(followLinks: false)) {
+    if (dir.existsSync()) {
+      for (final e in dir.listSync(followLinks: false)) {
         if (e is File) existingFileNames.add(p.basename(e.path));
       }
     }
@@ -232,8 +232,8 @@ class LocalStorageDataSource {
     final dir = _resolveDirectory(folderRel);
 
     final existingFileNames = <String>[];
-    if (await dir.exists()) {
-      await for (final e in dir.list(followLinks: false)) {
+    if (dir.existsSync()) {
+      for (final e in dir.listSync(followLinks: false)) {
         if (e is File) existingFileNames.add(p.basename(e.path));
       }
     }
@@ -274,13 +274,15 @@ class LocalStorageDataSource {
     String parentRelativePath = '',
   }) async {
     final parentDir = _resolveDirectory(parentRelativePath);
-    if (!await parentDir.exists()) {
-      await parentDir.create(recursive: true);
+    if (!parentDir.existsSync()) {
+      parentDir.createSync(recursive: true);
     }
 
     final existingDirNames = <String>[];
-    await for (final e in parentDir.list(followLinks: false)) {
-      if (e is Directory) existingDirNames.add(p.basename(e.path));
+    if (parentDir.existsSync()) {
+      for (final e in parentDir.listSync(followLinks: false)) {
+        if (e is Directory) existingDirNames.add(p.basename(e.path));
+      }
     }
 
     final sanitizedName = NameSanitizer.sanitize(name);
@@ -290,7 +292,9 @@ class LocalStorageDataSource {
         ? dirName
         : p.join(parentRelativePath, dirName).replaceAll(r'\', '/');
     final newDir = _resolveDirectory(newFolderRel);
-    await newDir.create(recursive: true);
+    if (!newDir.existsSync()) {
+      newDir.createSync(recursive: true);
+    }
 
     final folderId = _uuid.v4();
     final model = FolderModel(
@@ -322,9 +326,11 @@ class LocalStorageDataSource {
     final parentDir = _resolveDirectory(parentRel);
 
     final existingNames = <String>[];
-    await for (final e in parentDir.list(followLinks: false)) {
-      if (e is Directory && p.basename(e.path) != p.basename(oldDir.path)) {
-        existingNames.add(p.basename(e.path));
+    if (parentDir.existsSync()) {
+      for (final e in parentDir.listSync(followLinks: false)) {
+        if (e is Directory && p.basename(e.path) != p.basename(oldDir.path)) {
+          existingNames.add(p.basename(e.path));
+        }
       }
     }
 
@@ -363,9 +369,11 @@ class LocalStorageDataSource {
     final parentDir = _resolveDirectory(parentRel);
 
     final existingFileNames = <String>[];
-    await for (final e in parentDir.list(followLinks: false)) {
-      if (e is File && p.basename(e.path) != p.basename(file.path)) {
-        existingFileNames.add(p.basename(e.path));
+    if (parentDir.existsSync()) {
+      for (final e in parentDir.listSync(followLinks: false)) {
+        if (e is File && p.basename(e.path) != p.basename(file.path)) {
+          existingFileNames.add(p.basename(e.path));
+        }
       }
     }
 

@@ -24,6 +24,7 @@ class NoteListInitial extends NoteListState {}
 class NoteListLoading extends NoteListState {}
 
 class NoteListLoaded extends NoteListState {
+  final String folderRelativePath;
   final List<Folder> folders;
   final List<FileEntry> files;
   final DateTime? selectedDate;
@@ -31,6 +32,7 @@ class NoteListLoaded extends NoteListState {
   final HomeFilter currentFilter;
 
   const NoteListLoaded({
+    this.folderRelativePath = '',
     this.folders = const [],
     this.files = const [],
     this.selectedDate,
@@ -42,6 +44,7 @@ class NoteListLoaded extends NoteListState {
   List<FileEntry> get notes => files;
 
   NoteListLoaded copyWith({
+    String? folderRelativePath,
     List<Folder>? folders,
     List<FileEntry>? files,
     DateTime? Function()? selectedDate,
@@ -49,6 +52,7 @@ class NoteListLoaded extends NoteListState {
     HomeFilter? currentFilter,
   }) {
     return NoteListLoaded(
+      folderRelativePath: folderRelativePath ?? this.folderRelativePath,
       folders: folders ?? this.folders,
       files: files ?? this.files,
       selectedDate: selectedDate != null ? selectedDate() : this.selectedDate,
@@ -59,7 +63,7 @@ class NoteListLoaded extends NoteListState {
 
   @override
   List<Object?> get props =>
-      [folders, files, selectedDate, searchQuery, currentFilter];
+      [folderRelativePath, folders, files, selectedDate, searchQuery, currentFilter];
 }
 
 class NoteListError extends NoteListState {

@@ -12,11 +12,17 @@ class LoadNotes extends NoteListEvent {
   final DateTime? date;
   final String? query;
   final HomeFilter? filter;
+  final String folderRelativePath;
 
-  const LoadNotes({this.date, this.query, this.filter});
+  const LoadNotes({
+    this.date,
+    this.query,
+    this.filter,
+    this.folderRelativePath = '',
+  });
 
   @override
-  List<Object?> get props => [date, query, filter];
+  List<Object?> get props => [date, query, filter, folderRelativePath];
 }
 
 class SelectDateFilter extends NoteListEvent {
@@ -63,4 +69,17 @@ class TogglePinEvent extends NoteListEvent {
 
   @override
   List<Object?> get props => [id, isPinned];
+}
+
+class CreateFolderEvent extends NoteListEvent {
+  final String name;
+  final String parentRelativePath;
+
+  const CreateFolderEvent({
+    required this.name,
+    this.parentRelativePath = '',
+  });
+
+  @override
+  List<Object?> get props => [name, parentRelativePath];
 }

@@ -14,6 +14,7 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     on<SelectFilterEvent>(_onSelectFilter);
     on<DeleteNoteEvent>(_onDeleteNote);
     on<TogglePinEvent>(_onTogglePin);
+    on<CreateFolderEvent>(_onCreateFolder);
   }
 
   bool _matchesDate(FileEntry file, DateTime date) {
@@ -32,11 +33,12 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
   }
 
   Future<({List<Folder> folders, List<FileEntry> files})> _fetchFilteredContent({
+    String folderRelativePath = '',
     DateTime? selectedDate,
     String? query,
     HomeFilter filter = HomeFilter.semua,
   }) async {
-    final contents = await repository.getFolderContents('');
+    final contents = await repository.getFolderContents(folderRelativePath);
     var folders = contents.whereType<Folder>().toList();
     var files = contents.whereType<FileEntry>().toList();
 
@@ -93,11 +95,13 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     try {
       final filter = event.filter ?? HomeFilter.semua;
       final result = await _fetchFilteredContent(
+        folderRelativePath: event.folderRelativePath,
         selectedDate: event.date,
         query: event.query,
         filter: filter,
       );
       emit(NoteListLoaded(
+        folderRelativePath: event.folderRelativePath,
         folders: result.folders,
         files: result.files,
         selectedDate: event.date,
@@ -117,8 +121,10 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     DateTime? newDate = event.date;
     String query = '';
     HomeFilter filter = HomeFilter.semua;
+    String folderRel = '';
 
     if (currentState is NoteListLoaded) {
+      folderRel = currentState.folderRelativePath;
       if (currentState.selectedDate != null &&
           event.date != null &&
           currentState.selectedDate!.year == event.date!.year &&
@@ -132,11 +138,13 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
 
     try {
       final result = await _fetchFilteredContent(
+        folderRelativePath: folderRel,
         selectedDate: newDate,
         query: query.isNotEmpty ? query : null,
         filter: filter,
       );
       emit(NoteListLoaded(
+        folderRelativePath: folderRel,
         folders: result.folders,
         files: result.files,
         selectedDate: newDate,
@@ -155,19 +163,23 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     final currentState = state;
     DateTime? date;
     HomeFilter filter = HomeFilter.semua;
+    String folderRel = '';
 
     if (currentState is NoteListLoaded) {
+      folderRel = currentState.folderRelativePath;
       date = currentState.selectedDate;
       filter = currentState.currentFilter;
     }
 
     try {
       final result = await _fetchFilteredContent(
+        folderRelativePath: folderRel,
         selectedDate: date,
         query: event.query.isNotEmpty ? event.query : null,
         filter: filter,
       );
       emit(NoteListLoaded(
+        folderRelativePath: folderRel,
         folders: result.folders,
         files: result.files,
         selectedDate: date,
@@ -186,19 +198,23 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     final currentState = state;
     DateTime? date;
     String query = '';
+    String folderRel = '';
 
     if (currentState is NoteListLoaded) {
+      folderRel = currentState.folderRelativePath;
       date = currentState.selectedDate;
       query = currentState.searchQuery;
     }
 
     try {
       final result = await _fetchFilteredContent(
+        folderRelativePath: folderRel,
         selectedDate: date,
         query: query.isNotEmpty ? query : null,
         filter: event.filter,
       );
       emit(NoteListLoaded(
+        folderRelativePath: folderRel,
         folders: result.folders,
         files: result.files,
         selectedDate: date,
@@ -215,14 +231,15 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     Emitter<NoteListState> emit,
   ) async {
     try {
-      final contents = await repository.getFolderContents('');
+      final currentState = state;
+      final folderRel = currentState is NoteListLoaded ? currentState.folderRelativePath : '';
+      final contents = await repository.getFolderContents(folderRel);
       final entry = contents.firstWhere(
         (e) => e.id == event.id,
         orElse: () => throw Exception('Note not found'),
       );
       await repository.deleteEntry(entry);
 
-      final currentState = state;
       DateTime? date;
       String query = '';
       HomeFilter filter = HomeFilter.semua;
@@ -234,11 +251,13 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
       }
 
       final result = await _fetchFilteredContent(
+        folderRelativePath: folderRel,
         selectedDate: date,
         query: query.isNotEmpty ? query : null,
         filter: filter,
       );
       emit(NoteListLoaded(
+        folderRelativePath: folderRel,
         folders: result.folders,
         files: result.files,
         selectedDate: date,
@@ -255,14 +274,15 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     Emitter<NoteListState> emit,
   ) async {
     try {
-      final contents = await repository.getFolderContents('');
+      final currentState = state;
+      final folderRel = currentState is NoteListLoaded ? currentState.folderRelativePath : '';
+      final contents = await repository.getFolderContents(folderRel);
       final entry = contents.firstWhere(
         (e) => e.id == event.id && e is FileEntry,
         orElse: () => throw Exception('Note not found'),
       );
       await repository.toggleFavorite(entry as FileEntry);
 
-      final currentState = state;
       DateTime? date;
       String query = '';
       HomeFilter filter = HomeFilter.semua;
@@ -274,11 +294,56 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
       }
 
       final result = await _fetchFilteredContent(
+        folderRelativePath: folderRel,
         selectedDate: date,
         query: query.isNotEmpty ? query : null,
         filter: filter,
       );
       emit(NoteListLoaded(
+        folderRelativePath: folderRel,
+        folders: result.folders,
+        files: result.files,
+        selectedDate: date,
+        searchQuery: query,
+        currentFilter: filter,
+      ));
+    } catch (e) {
+      emit(NoteListError(e.toString()));
+    }
+  }
+
+  Future<void> _onCreateFolder(
+    CreateFolderEvent event,
+    Emitter<NoteListState> emit,
+  ) async {
+    try {
+      await repository.createFolder(
+        name: event.name,
+        parentRelativePath: event.parentRelativePath,
+      );
+
+      final currentState = state;
+      final folderRel = currentState is NoteListLoaded
+          ? currentState.folderRelativePath
+          : event.parentRelativePath;
+      DateTime? date;
+      String query = '';
+      HomeFilter filter = HomeFilter.semua;
+
+      if (currentState is NoteListLoaded) {
+        date = currentState.selectedDate;
+        query = currentState.searchQuery;
+        filter = currentState.currentFilter;
+      }
+
+      final result = await _fetchFilteredContent(
+        folderRelativePath: folderRel,
+        selectedDate: date,
+        query: query.isNotEmpty ? query : null,
+        filter: filter,
+      );
+      emit(NoteListLoaded(
+        folderRelativePath: folderRel,
         folders: result.folders,
         files: result.files,
         selectedDate: date,

@@ -200,7 +200,10 @@ class NotesIndexManager {
       return empty;
     }
 
-    await for (final entity in notesDataDir.list(recursive: true, followLinks: false)) {
+    final entities = notesDataDir.existsSync()
+        ? notesDataDir.listSync(recursive: true, followLinks: false)
+        : <FileSystemEntity>[];
+    for (final entity in entities) {
       if (entity is File && entity.path.endsWith('.json')) {
         final filename = p.basename(entity.path);
         if (filename == '_folder.json' || filename.endsWith('.tmp') || filename.endsWith('.bak')) {
@@ -208,7 +211,7 @@ class NotesIndexManager {
         }
 
         try {
-          final content = await entity.readAsString(encoding: utf8);
+          final content = entity.readAsStringSync(encoding: utf8);
           final map = json.decode(content) as Map<String, dynamic>;
           final type = map['type'] as String? ?? 'page';
           final id = map['id'] as String? ?? '';

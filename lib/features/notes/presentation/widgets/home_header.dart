@@ -10,6 +10,8 @@ class HomeHeader extends StatelessWidget {
   final String searchQuery;
   final VoidCallback? onBurgerTap;
   final VoidCallback? onNotificationTap;
+  final bool showBackButton;
+  final VoidCallback? onBackTap;
 
   const HomeHeader({
     super.key,
@@ -17,6 +19,8 @@ class HomeHeader extends StatelessWidget {
     this.searchQuery = '',
     this.onBurgerTap,
     this.onNotificationTap,
+    this.showBackButton = false,
+    this.onBackTap,
   });
 
   @override
@@ -26,12 +30,14 @@ class HomeHeader extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // 1. Burger button (TODO: M9)
+          // 1. Back button (in folder mode) or Burger button (Home)
           GestureDetector(
-            onTap: onBurgerTap ??
-                () {
-                  // TODO: M9 - Buka drawer navigasi explorer
-                },
+            onTap: showBackButton
+                ? (onBackTap ?? () => Navigator.of(context).maybePop())
+                : (onBurgerTap ??
+                    () {
+                      // TODO: M9 - Buka drawer navigasi explorer
+                    }),
             child: Container(
               width: AppConstants.searchBarHeight,
               height: AppConstants.searchBarHeight,
@@ -39,8 +45,8 @@ class HomeHeader extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.borderLight, width: 1),
               ),
-              child: const Icon(
-                Icons.menu,
+              child: Icon(
+                showBackButton ? Icons.arrow_back_rounded : Icons.menu,
                 size: 20,
                 color: AppColors.textPrimary,
               ),
