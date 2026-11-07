@@ -5,6 +5,7 @@ import '../../features/notes/presentation/bloc/note_list/note_list_bloc.dart';
 import '../../features/notes/presentation/bloc/note_list/note_list_event.dart';
 import '../../features/notes/presentation/pages/editor_placeholder_page.dart';
 import '../../features/notes/presentation/pages/home_page.dart';
+import '../../features/notes/presentation/pages/list_editor_page.dart';
 import '../../features/notes/presentation/pages/note_editor_page.dart';
 
 class AppRouter {
@@ -52,6 +53,18 @@ class AppRouter {
           final folder = state.uri.queryParameters['folder'] ?? '';
           return NoteEditorPage(
             noteId: noteId,
+            folderRelativePath: folder,
+          );
+        },
+      ),
+      GoRoute(
+        path: '/list/:id',
+        name: 'list-editor',
+        builder: (context, state) {
+          final listId = state.pathParameters['id'];
+          final folder = state.uri.queryParameters['folder'] ?? '';
+          return ListEditorPage(
+            noteId: listId,
             folderRelativePath: folder,
           );
         },

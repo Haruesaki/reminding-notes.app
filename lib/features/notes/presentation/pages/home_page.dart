@@ -18,6 +18,7 @@ import '../widgets/home_header.dart';
 import '../widgets/note_card.dart';
 import '../widgets/notes_empty_state.dart';
 import 'editor_placeholder_page.dart';
+import 'list_editor_page.dart';
 import 'note_editor_page.dart';
 
 class HomePage extends StatelessWidget {
@@ -113,6 +114,20 @@ class HomePage extends StatelessWidget {
       await Navigator.of(context).push(
         MaterialPageRoute(
           builder: (_) => NoteEditorPage(
+            folderRelativePath: folderRelativePath,
+          ),
+        ),
+      );
+      if (context.mounted) {
+        context.read<NoteListBloc>().add(LoadNotes(folderRelativePath: folderRelativePath));
+      }
+      return;
+    }
+
+    if (fileType == 'List') {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ListEditorPage(
             folderRelativePath: folderRelativePath,
           ),
         ),
@@ -382,7 +397,19 @@ class HomePage extends StatelessWidget {
                     note: item.file,
                     index: item.index,
                     onTap: () async {
-                      await context.push('/note/${item.file.id}');
+                      if (item.file is ListFile) {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ListEditorPage(
+                              noteId: item.file.id,
+                              folderRelativePath: folderRelativePath,
+                              initialList: item.file as ListFile,
+                            ),
+                          ),
+                        );
+                      } else {
+                        await context.push('/note/${item.file.id}');
+                      }
                       if (context.mounted) {
                         context
                             .read<NoteListBloc>()

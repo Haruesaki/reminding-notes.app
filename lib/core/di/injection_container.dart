@@ -8,6 +8,7 @@ import '../../features/explorer/data/datasources/notes_index_manager.dart';
 import '../../features/explorer/data/repositories/explorer_repository_impl.dart';
 import '../../features/explorer/domain/repositories/explorer_repository.dart';
 import '../../features/explorer/domain/usecases/explorer_usecases.dart';
+import '../../features/notes/presentation/bloc/list_editor/list_editor_bloc.dart';
 import '../../features/notes/presentation/bloc/note_editor/note_editor_bloc.dart';
 import '../../features/notes/presentation/bloc/note_list/note_list_bloc.dart';
 
@@ -69,6 +70,9 @@ Future<void> initDependencies({
   );
   sl.registerFactory<NoteEditorBloc>(
     () => NoteEditorBloc(repository: sl<ExplorerRepository>()),
+  );
+  sl.registerFactory<ListEditorBloc>(
+    () => ListEditorBloc(repository: sl<ExplorerRepository>()),
   );
 }
 
