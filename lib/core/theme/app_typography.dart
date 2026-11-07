@@ -85,6 +85,26 @@ class AppTypography {
     color: AppColors.filterChipInactiveText,
   );
 
+  // Folder tile
+  static const TextStyle folderTitle = TextStyle(
+    fontSize: 13.0,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textPrimary,
+  );
+
+  static const TextStyle folderSubtitle = TextStyle(
+    fontSize: 11.0,
+    fontWeight: FontWeight.w400,
+    color: AppColors.textSecondary,
+  );
+
+  // Empty state
+  static const TextStyle emptyStateText = TextStyle(
+    fontSize: 14.0,
+    fontWeight: FontWeight.w400,
+    color: AppColors.textSecondary,
+  );
+
   // Editor
   static const TextStyle editorTitle = TextStyle(
     fontSize: 40.0,

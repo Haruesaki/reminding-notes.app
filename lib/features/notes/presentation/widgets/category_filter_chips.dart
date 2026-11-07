@@ -1,43 +1,37 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../bloc/note_list/note_list_state.dart';
 
-class CategoryFilterChips extends StatelessWidget {
-  final List<String> categories;
-  final String? selectedCategory;
-  final ValueChanged<String?> onCategorySelected;
+/// Filter chips for entry types conforming to PRD Section 7.1.
+/// Filters: Semua, Favorit, Folder, List, Page.
+class EntryFilterChips extends StatelessWidget {
+  final HomeFilter selectedFilter;
+  final ValueChanged<HomeFilter> onFilterSelected;
 
-  const CategoryFilterChips({
+  const EntryFilterChips({
     super.key,
-    this.categories = const ['All Notes', 'Personal', 'Work', 'Ideas', 'Urgent'],
-    required this.selectedCategory,
-    required this.onCategorySelected,
+    required this.selectedFilter,
+    required this.onFilterSelected,
   });
 
   @override
   Widget build(BuildContext context) {
+    const filters = HomeFilter.values;
+
     return SizedBox(
       height: 36,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
-        itemCount: categories.length,
+        itemCount: filters.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
-          final cat = categories[index];
-          final isAllNotes = cat == 'All Notes';
-          final isSelected = isAllNotes
-              ? (selectedCategory == null || selectedCategory!.isEmpty)
-              : selectedCategory == cat;
+          final filter = filters[index];
+          final isSelected = selectedFilter == filter;
 
           return GestureDetector(
-            onTap: () {
-              if (isAllNotes) {
-                onCategorySelected(null);
-              } else {
-                onCategorySelected(cat);
-              }
-            },
+            onTap: () => onFilterSelected(filter),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -55,7 +49,7 @@ class CategoryFilterChips extends StatelessWidget {
               ),
               child: Center(
                 child: Text(
-                  cat,
+                  filter.label,
                   style: isSelected
                       ? AppTypography.filterChipActive
                       : AppTypography.filterChipInactive,
@@ -68,3 +62,6 @@ class CategoryFilterChips extends StatelessWidget {
     );
   }
 }
+
+/// Backward compatibility alias
+typedef CategoryFilterChips = EntryFilterChips;

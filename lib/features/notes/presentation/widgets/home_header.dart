@@ -1,76 +1,96 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_typography.dart';
+import 'notes_search_bar.dart';
 
+/// Top bar for Home screen conforming to Figma 2:14 and PRD Section 7.1.
+/// Layout: Burger icon (left) -> Search bar (center) -> Notification bell with green dot (right).
 class HomeHeader extends StatelessWidget {
+  final ValueChanged<String> onQueryChanged;
+  final String searchQuery;
+  final VoidCallback? onBurgerTap;
   final VoidCallback? onNotificationTap;
 
-  const HomeHeader({super.key, this.onNotificationTap});
+  const HomeHeader({
+    super.key,
+    required this.onQueryChanged,
+    this.searchQuery = '',
+    this.onBurgerTap,
+    this.onNotificationTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final now = DateTime.now();
-    final dateFormatted = DateFormat('EEEE, d MMM').format(now);
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Hi, Andrea 👋',
-              style: AppTypography.heading2.copyWith(
+    return SizedBox(
+      height: AppConstants.searchBarHeight,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // 1. Burger button (TODO: M9)
+          GestureDetector(
+            onTap: onBurgerTap ??
+                () {
+                  // TODO: M9 - Buka drawer navigasi explorer
+                },
+            child: Container(
+              width: AppConstants.searchBarHeight,
+              height: AppConstants.searchBarHeight,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.borderLight, width: 1),
+              ),
+              child: const Icon(
+                Icons.menu,
+                size: 20,
                 color: AppColors.textPrimary,
-                fontWeight: FontWeight.w700,
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              dateFormatted,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textSecondary,
-              ),
-            ),
-          ],
-        ),
-        // Notification bell with green indicator dot
-        GestureDetector(
-          onTap: onNotificationTap,
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.borderLight, width: 1),
-            ),
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                const Icon(
-                  Icons.notifications_none_outlined,
-                  size: 22,
-                  color: AppColors.textPrimary,
-                ),
-                Positioned(
-                  top: 10,
-                  right: 12,
-                  child: Container(
-                    width: 7,
-                    height: 7,
-                    decoration: const BoxDecoration(
-                      color: AppColors.notificationDot,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
-              ],
             ),
           ),
-        ),
-      ],
+          const SizedBox(width: 10),
+          // 2. Search bar
+          Expanded(
+            child: NotesSearchBar(
+              initialQuery: searchQuery,
+              onQueryChanged: onQueryChanged,
+            ),
+          ),
+          const SizedBox(width: 10),
+          // 3. Notification bell with green indicator dot
+          GestureDetector(
+            onTap: onNotificationTap,
+            child: Container(
+              width: AppConstants.searchBarHeight,
+              height: AppConstants.searchBarHeight,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.borderLight, width: 1),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  const Icon(
+                    Icons.notifications_none_outlined,
+                    size: 22,
+                    color: AppColors.textPrimary,
+                  ),
+                  Positioned(
+                    top: 10,
+                    right: 11,
+                    child: Container(
+                      width: 7,
+                      height: 7,
+                      decoration: const BoxDecoration(
+                        color: AppColors.notificationDot,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -17,11 +17,14 @@ class DateSelectorStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final today = DateTime.now();
-    // 3 days back, 10 days ahead
-    final days = List.generate(14, (i) {
-      final base = DateTime(today.year, today.month, today.day);
-      return base.add(Duration(days: i - 3));
+    final todayMidnight = DateTime(today.year, today.month, today.day);
+
+    // 6 day chips starting from today (PRD Section 7.1)
+    final days = List.generate(6, (i) {
+      return todayMidnight.add(Duration(days: i));
     });
+
+    final activeDate = selectedDate ?? todayMidnight;
 
     return SizedBox(
       height: AppConstants.dateChipHeight,
@@ -33,13 +36,12 @@ class DateSelectorStrip extends StatelessWidget {
             const SizedBox(width: AppConstants.dateChipSpacing),
         itemBuilder: (context, index) {
           final day = days[index];
-          final isSelected = selectedDate != null &&
-              selectedDate!.year == day.year &&
-              selectedDate!.month == day.month &&
-              selectedDate!.day == day.day;
+          final isSelected = activeDate.year == day.year &&
+              activeDate.month == day.month &&
+              activeDate.day == day.day;
 
-          final weekdayName = DateFormat('E').format(day); // e.g., Thu
-          final dayNumber = DateFormat('d').format(day); // e.g., 22
+          final weekdayName = DateFormat('E').format(day); // e.g. Thu
+          final dayNumber = DateFormat('d').format(day); // e.g. 22
 
           return GestureDetector(
             onTap: () => onDateSelected(day),
@@ -55,7 +57,10 @@ class DateSelectorStrip extends StatelessWidget {
                     BorderRadius.circular(AppConstants.dateChipRadius),
                 border: isSelected
                     ? null
-                    : Border.all(color: AppColors.dateChipInactiveBorder, width: 1),
+                    : Border.all(
+                        color: AppColors.dateChipInactiveBorder,
+                        width: 1,
+                      ),
               ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -69,7 +74,7 @@ class DateSelectorStrip extends StatelessWidget {
                       fontWeight: FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Text(
                     dayNumber,
                     style: AppTypography.title.copyWith(
@@ -79,6 +84,7 @@ class DateSelectorStrip extends StatelessWidget {
                       fontWeight: FontWeight.w700,
                     ),
                   ),
+                  // TODO: M7 - Indicator dot for deadline status (merah / hijau)
                 ],
               ),
             ),

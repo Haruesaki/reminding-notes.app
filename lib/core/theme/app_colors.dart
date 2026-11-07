@@ -13,7 +13,7 @@ class AppColors {
   static const Color fabIcon = Color(0xFFFFFFFF);
 
   // Notification indicator
-  static const Color notificationDot = Color(0xFF29FF8B);
+  static const Color notificationDot = Color(0xFF22E58B);
 
   // Date strip
   static const Color dateChipActive = Color(0xFF181818);
@@ -22,10 +22,15 @@ class AppColors {
   static const Color dateChipInactiveText = Color(0xFF181818);
 
   // Filter chips
-  static const Color filterChipActive = Color(0xFF0A0A0A);
+  static const Color filterChipActive = Color(0xFF0B0B0B);
   static const Color filterChipActiveText = Color(0xFFFFFFFF);
   static const Color filterChipInactiveText = Color(0xFF7C7C7C);
   static const Color filterChipInactiveBorder = Color(0xFFE2E2E2);
+
+  // Folder tile
+  static const Color folderTileBackground = Color(0xFFFAFAFA);
+  static const Color folderTileBorder = Color(0xFFE6E6E6);
+  static const Color folderIcon = Color(0xFF181818);
 
   // Editor
   static const Color editorTitle = Color(0xFF181818);
@@ -41,12 +46,13 @@ class AppColors {
 
   // Pastel Card Palette (Figma: Home frames)
   static const List<Color> pastelCards = [
-    Color(0xFFD8E8FB), // Blue
-    Color(0xFFFCE89C), // Yellow
-    Color(0xFFFFDAE3), // Pink
-    Color(0xFFFFE9DD), // Peach
-    Color(0xFFAFE8CA), // Green
-    Color(0xFFFBFAD8), // Cream
+    Color(0xFFD9E8FC), // Blue
+    Color(0xFFFFD8F4), // Pink
+    Color(0xFFFDE99D), // Yellow
+    Color(0xFFB0E9CA), // Green
+    Color(0xFFFFEADD), // Peach
+    Color(0xFFFFDBE4), // Rose
+    Color(0xFFFCFAD9), // Cream
   ];
 
   static Color cardColor(int index) =>

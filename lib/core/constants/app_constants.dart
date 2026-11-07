@@ -15,6 +15,7 @@ class AppConstants {
   static const double dateChipHeight = 91.0;
   static const double dateChipSpacing = 8.0;
   static const double fabSize = 61.0;
+  static const double folderTileHeight = 64.0;
   static const double formatToolbarRadius = 16.0;
   static const double formatToolbarHeight = 57.0;
 

@@ -3,17 +3,11 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 
 class NotesEmptyState extends StatelessWidget {
-  final String title;
   final String message;
-  final VoidCallback? onAction;
-  final String? actionLabel;
 
   const NotesEmptyState({
     super.key,
-    this.title = 'No notes yet',
-    this.message = 'Tap the + button below to create your first note',
-    this.onAction,
-    this.actionLabel,
+    this.message = 'Belum ada catatan. Ketuk + untuk membuat.',
   });
 
   @override
@@ -40,32 +34,10 @@ class NotesEmptyState extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              title,
-              style: AppTypography.title.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
               message,
-              style: AppTypography.caption.copyWith(
-                color: AppColors.textSecondary,
-                height: 1.4,
-              ),
+              style: AppTypography.emptyStateText,
               textAlign: TextAlign.center,
             ),
-            if (onAction != null && actionLabel != null) ...[
-              const SizedBox(height: 16),
-              TextButton(
-                onPressed: onAction,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.textPrimary,
-                  textStyle: AppTypography.body.copyWith(fontWeight: FontWeight.w600),
-                ),
-                child: Text(actionLabel!),
-              ),
-            ],
           ],
         ),
       ),

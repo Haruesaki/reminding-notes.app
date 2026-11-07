@@ -23,15 +23,63 @@ class NoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bgColor = AppColors.cardColor(index);
+    // Pastel background based on note's colorIndex
+    final bgColor = AppColors.cardColor(note.colorIndex);
     final dateString = DateFormat('MMM d, yyyy').format(note.updatedAt);
-    final String contentText;
-    if (note is PageFile) {
-      contentText = (note as PageFile).plainText;
-    } else if (note is ListFile) {
-      contentText = (note as ListFile).tasks.map((t) => t.text).join(' • ');
-    } else {
-      contentText = '';
+
+    Widget buildPreview() {
+      final file = note;
+      if (file is PageFile) {
+        if (file.plainText.trim().isEmpty) return const SizedBox.shrink();
+        return Text(
+          file.plainText,
+          style: AppTypography.cardBody,
+          maxLines: 8,
+          overflow: TextOverflow.ellipsis,
+        );
+      } else if (file is ListFile) {
+        if (file.tasks.isEmpty) return const SizedBox.shrink();
+        final displayTasks = file.tasks.take(6).toList();
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: displayTasks.map((task) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Icon(
+                    task.done
+                        ? Icons.check_box_outlined
+                        : Icons.check_box_outline_blank,
+                    size: 14,
+                    color: task.done
+                        ? AppColors.textSecondary
+                        : AppColors.textPrimary,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      task.text,
+                      style: AppTypography.cardBody.copyWith(
+                        decoration:
+                            task.done ? TextDecoration.lineThrough : null,
+                        color: task.done
+                            ? AppColors.textSecondary
+                            : AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      }
+      return const SizedBox.shrink();
     }
 
     return Dismissible(
@@ -57,6 +105,7 @@ class NoteCard extends StatelessWidget {
           padding: const EdgeInsets.all(AppConstants.cardPadding),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -83,13 +132,7 @@ class NoteCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 8),
-              if (contentText.isNotEmpty)
-                Text(
-                  contentText,
-                  style: AppTypography.cardBody,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              buildPreview(),
               const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,

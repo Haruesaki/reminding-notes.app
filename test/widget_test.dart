@@ -38,17 +38,21 @@ void main() {
     });
     await tester.pump(const Duration(milliseconds: 100));
 
-    // Verify Greeting
-    expect(find.text('Hi, Andrea 👋'), findsOneWidget);
-
     // Verify Search bar
     expect(find.text('Search notes...'), findsOneWidget);
 
-    // Verify Filter Chip
-    expect(find.text('All Notes'), findsOneWidget);
+    // Verify Filter Chips from HomeFilter
+    expect(find.text('Semua'), findsOneWidget);
+    expect(find.text('Favorit'), findsOneWidget);
+    expect(find.text('Folder'), findsOneWidget);
+    expect(find.text('List'), findsOneWidget);
+    expect(find.text('Page'), findsOneWidget);
 
     // Verify Empty State when no notes exist
-    expect(find.text('No notes here'), findsOneWidget);
+    expect(
+      find.text('Belum ada catatan. Ketuk + untuk membuat.'),
+      findsOneWidget,
+    );
 
     // Verify FAB
     expect(find.byType(FloatingActionButton), findsOneWidget);

@@ -11,21 +11,38 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     on<LoadNotes>(_onLoadNotes);
     on<SelectDateFilter>(_onSelectDateFilter);
     on<SearchNotes>(_onSearchNotes);
-    on<SelectCategoryFilter>(_onSelectCategoryFilter);
+    on<SelectFilterEvent>(_onSelectFilter);
     on<DeleteNoteEvent>(_onDeleteNote);
     on<TogglePinEvent>(_onTogglePin);
   }
 
-  Future<List<FileEntry>> _fetchFilteredFiles({
+  bool _matchesDate(FileEntry file, DateTime date) {
+    if (file is ListFile) {
+      if (file.tasks.any((t) =>
+          t.deadline != null &&
+          t.deadline!.at.year == date.year &&
+          t.deadline!.at.month == date.month &&
+          t.deadline!.at.day == date.day)) {
+        return true;
+      }
+    }
+    return file.updatedAt.year == date.year &&
+        file.updatedAt.month == date.month &&
+        file.updatedAt.day == date.day;
+  }
+
+  Future<({List<Folder> folders, List<FileEntry> files})> _fetchFilteredContent({
     DateTime? selectedDate,
     String? query,
-    String? category,
+    HomeFilter filter = HomeFilter.semua,
   }) async {
     final contents = await repository.getFolderContents('');
+    var folders = contents.whereType<Folder>().toList();
     var files = contents.whereType<FileEntry>().toList();
 
     if (query != null && query.trim().isNotEmpty) {
       final q = query.trim().toLowerCase();
+      folders = folders.where((f) => f.name.toLowerCase().contains(q)).toList();
       files = files.where((f) {
         final titleMatch = f.title.toLowerCase().contains(q);
         final contentMatch = f is PageFile
@@ -37,15 +54,35 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
       }).toList();
     }
 
-    if (selectedDate != null) {
-      files = files.where((f) {
-        return f.updatedAt.year == selectedDate.year &&
-            f.updatedAt.month == selectedDate.month &&
-            f.updatedAt.day == selectedDate.day;
-      }).toList();
+    switch (filter) {
+      case HomeFilter.semua:
+        break;
+      case HomeFilter.favorit:
+        folders = [];
+        files = files.where((f) => f.isFavorite).toList();
+        break;
+      case HomeFilter.folder:
+        files = [];
+        break;
+      case HomeFilter.list:
+        folders = [];
+        files = files.whereType<ListFile>().toList();
+        break;
+      case HomeFilter.page:
+        folders = [];
+        files = files.whereType<PageFile>().toList();
+        break;
     }
 
-    return files;
+    if (selectedDate != null) {
+      final hasAnyDeadline = files.any(
+          (f) => f is ListFile && f.tasks.any((t) => t.deadline != null));
+      if (hasAnyDeadline) {
+        files = files.where((f) => _matchesDate(f, selectedDate)).toList();
+      }
+    }
+
+    return (folders: folders, files: files);
   }
 
   Future<void> _onLoadNotes(
@@ -54,16 +91,18 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
   ) async {
     emit(NoteListLoading());
     try {
-      final notes = await _fetchFilteredFiles(
+      final filter = event.filter ?? HomeFilter.semua;
+      final result = await _fetchFilteredContent(
         selectedDate: event.date,
         query: event.query,
-        category: event.category,
+        filter: filter,
       );
       emit(NoteListLoaded(
-        notes: notes,
+        folders: result.folders,
+        files: result.files,
         selectedDate: event.date,
         searchQuery: event.query ?? '',
-        selectedCategory: event.category,
+        currentFilter: filter,
       ));
     } catch (e) {
       emit(NoteListError(e.toString()));
@@ -77,7 +116,7 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     final currentState = state;
     DateTime? newDate = event.date;
     String query = '';
-    String? category;
+    HomeFilter filter = HomeFilter.semua;
 
     if (currentState is NoteListLoaded) {
       if (currentState.selectedDate != null &&
@@ -88,20 +127,21 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
         newDate = null;
       }
       query = currentState.searchQuery;
-      category = currentState.selectedCategory;
+      filter = currentState.currentFilter;
     }
 
     try {
-      final notes = await _fetchFilteredFiles(
+      final result = await _fetchFilteredContent(
         selectedDate: newDate,
         query: query.isNotEmpty ? query : null,
-        category: category,
+        filter: filter,
       );
       emit(NoteListLoaded(
-        notes: notes,
+        folders: result.folders,
+        files: result.files,
         selectedDate: newDate,
         searchQuery: query,
-        selectedCategory: category,
+        currentFilter: filter,
       ));
     } catch (e) {
       emit(NoteListError(e.toString()));
@@ -114,58 +154,56 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
   ) async {
     final currentState = state;
     DateTime? date;
-    String? category;
+    HomeFilter filter = HomeFilter.semua;
 
     if (currentState is NoteListLoaded) {
       date = currentState.selectedDate;
-      category = currentState.selectedCategory;
+      filter = currentState.currentFilter;
     }
 
     try {
-      final notes = await _fetchFilteredFiles(
+      final result = await _fetchFilteredContent(
         selectedDate: date,
         query: event.query.isNotEmpty ? event.query : null,
-        category: category,
+        filter: filter,
       );
       emit(NoteListLoaded(
-        notes: notes,
+        folders: result.folders,
+        files: result.files,
         selectedDate: date,
         searchQuery: event.query,
-        selectedCategory: category,
+        currentFilter: filter,
       ));
     } catch (e) {
       emit(NoteListError(e.toString()));
     }
   }
 
-  Future<void> _onSelectCategoryFilter(
-    SelectCategoryFilter event,
+  Future<void> _onSelectFilter(
+    SelectFilterEvent event,
     Emitter<NoteListState> emit,
   ) async {
     final currentState = state;
     DateTime? date;
     String query = '';
-    String? newCategory = event.category;
 
     if (currentState is NoteListLoaded) {
       date = currentState.selectedDate;
       query = currentState.searchQuery;
-      if (currentState.selectedCategory == event.category) {
-        newCategory = null;
-      }
     }
 
     try {
-      final notes = await _fetchFilteredFiles(
+      final result = await _fetchFilteredContent(
         selectedDate: date,
         query: query.isNotEmpty ? query : null,
-        category: newCategory,
+        filter: event.filter,
       );
       emit(NoteListLoaded(
-        notes: notes,
+        folders: result.folders,
+        files: result.files,
         selectedDate: date,
         searchQuery: query,
-        selectedCategory: newCategory,
+        currentFilter: event.filter,
       ));
     } catch (e) {
       emit(NoteListError(e.toString()));
@@ -187,24 +225,25 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
       final currentState = state;
       DateTime? date;
       String query = '';
-      String? category;
+      HomeFilter filter = HomeFilter.semua;
 
       if (currentState is NoteListLoaded) {
         date = currentState.selectedDate;
         query = currentState.searchQuery;
-        category = currentState.selectedCategory;
+        filter = currentState.currentFilter;
       }
 
-      final notes = await _fetchFilteredFiles(
+      final result = await _fetchFilteredContent(
         selectedDate: date,
         query: query.isNotEmpty ? query : null,
-        category: category,
+        filter: filter,
       );
       emit(NoteListLoaded(
-        notes: notes,
+        folders: result.folders,
+        files: result.files,
         selectedDate: date,
         searchQuery: query,
-        selectedCategory: category,
+        currentFilter: filter,
       ));
     } catch (e) {
       emit(NoteListError(e.toString()));
@@ -226,24 +265,25 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
       final currentState = state;
       DateTime? date;
       String query = '';
-      String? category;
+      HomeFilter filter = HomeFilter.semua;
 
       if (currentState is NoteListLoaded) {
         date = currentState.selectedDate;
         query = currentState.searchQuery;
-        category = currentState.selectedCategory;
+        filter = currentState.currentFilter;
       }
 
-      final notes = await _fetchFilteredFiles(
+      final result = await _fetchFilteredContent(
         selectedDate: date,
         query: query.isNotEmpty ? query : null,
-        category: category,
+        filter: filter,
       );
       emit(NoteListLoaded(
-        notes: notes,
+        folders: result.folders,
+        files: result.files,
         selectedDate: date,
         searchQuery: query,
-        selectedCategory: category,
+        currentFilter: filter,
       ));
     } catch (e) {
       emit(NoteListError(e.toString()));

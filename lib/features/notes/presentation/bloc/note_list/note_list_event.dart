@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'note_list_state.dart';
 
 abstract class NoteListEvent extends Equatable {
   const NoteListEvent();
@@ -10,12 +11,12 @@ abstract class NoteListEvent extends Equatable {
 class LoadNotes extends NoteListEvent {
   final DateTime? date;
   final String? query;
-  final String? category;
+  final HomeFilter? filter;
 
-  const LoadNotes({this.date, this.query, this.category});
+  const LoadNotes({this.date, this.query, this.filter});
 
   @override
-  List<Object?> get props => [date, query, category];
+  List<Object?> get props => [date, query, filter];
 }
 
 class SelectDateFilter extends NoteListEvent {
@@ -36,13 +37,13 @@ class SearchNotes extends NoteListEvent {
   List<Object?> get props => [query];
 }
 
-class SelectCategoryFilter extends NoteListEvent {
-  final String? category;
+class SelectFilterEvent extends NoteListEvent {
+  final HomeFilter filter;
 
-  const SelectCategoryFilter(this.category);
+  const SelectFilterEvent(this.filter);
 
   @override
-  List<Object?> get props => [category];
+  List<Object?> get props => [filter];
 }
 
 class DeleteNoteEvent extends NoteListEvent {

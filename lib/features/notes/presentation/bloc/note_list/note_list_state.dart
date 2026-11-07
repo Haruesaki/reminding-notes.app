@@ -1,6 +1,17 @@
 import 'package:equatable/equatable.dart';
 import 'package:reminding/features/explorer/domain/entities/entities.dart';
 
+enum HomeFilter {
+  semua('Semua'),
+  favorit('Favorit'),
+  folder('Folder'),
+  list('List'),
+  page('Page');
+
+  final String label;
+  const HomeFilter(this.label);
+}
+
 abstract class NoteListState extends Equatable {
   const NoteListState();
 
@@ -13,35 +24,42 @@ class NoteListInitial extends NoteListState {}
 class NoteListLoading extends NoteListState {}
 
 class NoteListLoaded extends NoteListState {
-  final List<FileEntry> notes;
+  final List<Folder> folders;
+  final List<FileEntry> files;
   final DateTime? selectedDate;
   final String searchQuery;
-  final String? selectedCategory;
+  final HomeFilter currentFilter;
 
   const NoteListLoaded({
-    required this.notes,
+    this.folders = const [],
+    this.files = const [],
     this.selectedDate,
     this.searchQuery = '',
-    this.selectedCategory,
+    this.currentFilter = HomeFilter.semua,
   });
 
+  /// Backward compatibility getter for tests
+  List<FileEntry> get notes => files;
+
   NoteListLoaded copyWith({
-    List<FileEntry>? notes,
+    List<Folder>? folders,
+    List<FileEntry>? files,
     DateTime? Function()? selectedDate,
     String? searchQuery,
-    String? Function()? selectedCategory,
+    HomeFilter? currentFilter,
   }) {
     return NoteListLoaded(
-      notes: notes ?? this.notes,
+      folders: folders ?? this.folders,
+      files: files ?? this.files,
       selectedDate: selectedDate != null ? selectedDate() : this.selectedDate,
       searchQuery: searchQuery ?? this.searchQuery,
-      selectedCategory:
-          selectedCategory != null ? selectedCategory() : this.selectedCategory,
+      currentFilter: currentFilter ?? this.currentFilter,
     );
   }
 
   @override
-  List<Object?> get props => [notes, selectedDate, searchQuery, selectedCategory];
+  List<Object?> get props =>
+      [folders, files, selectedDate, searchQuery, currentFilter];
 }
 
 class NoteListError extends NoteListState {
