@@ -194,12 +194,32 @@ class LocalStorageDataSource {
       }
     }
 
+    final sanitizedTitle = NameSanitizer.sanitize(
+      page.title.trim().isEmpty ? 'Tanpa judul' : page.title,
+    );
     String fileName;
+    File? oldFileToDelete;
+
     if (page.relativePath.isNotEmpty && targetFolderRelativePath == null) {
-      // Pertahankan filename yang ada jika update in-place
-      fileName = p.basename(page.relativePath);
+      final oldFileName = p.basename(page.relativePath);
+      final oldBase = p.basenameWithoutExtension(oldFileName);
+      if (oldBase.toLowerCase() == sanitizedTitle.toLowerCase()) {
+        fileName = oldFileName;
+      } else {
+        final available = existingFileNames
+            .where((n) => n.toLowerCase() != oldFileName.toLowerCase())
+            .toList();
+        fileName = NameSanitizer.resolveCollision(
+          sanitizedTitle,
+          available,
+          extension: '.json',
+        );
+        final oldFile = _resolveFile(page.relativePath);
+        if (oldFile.existsSync()) {
+          oldFileToDelete = oldFile;
+        }
+      }
     } else {
-      final sanitizedTitle = NameSanitizer.sanitize(page.title);
       fileName = NameSanitizer.resolveCollision(
         sanitizedTitle,
         existingFileNames,
@@ -216,6 +236,11 @@ class LocalStorageDataSource {
     ));
 
     await _atomicWrite(targetFile, model.toJson());
+    if (oldFileToDelete != null && oldFileToDelete.path != targetFile.path) {
+      if (oldFileToDelete.existsSync()) {
+        oldFileToDelete.deleteSync();
+      }
+    }
     await _ensureInOrder(folderRel, model.id);
 
     if (indexManager != null) {
@@ -238,11 +263,32 @@ class LocalStorageDataSource {
       }
     }
 
+    final sanitizedTitle = NameSanitizer.sanitize(
+      listFile.title.trim().isEmpty ? 'Tanpa judul' : listFile.title,
+    );
     String fileName;
+    File? oldFileToDelete;
+
     if (listFile.relativePath.isNotEmpty && targetFolderRelativePath == null) {
-      fileName = p.basename(listFile.relativePath);
+      final oldFileName = p.basename(listFile.relativePath);
+      final oldBase = p.basenameWithoutExtension(oldFileName);
+      if (oldBase.toLowerCase() == sanitizedTitle.toLowerCase()) {
+        fileName = oldFileName;
+      } else {
+        final available = existingFileNames
+            .where((n) => n.toLowerCase() != oldFileName.toLowerCase())
+            .toList();
+        fileName = NameSanitizer.resolveCollision(
+          sanitizedTitle,
+          available,
+          extension: '.json',
+        );
+        final oldFile = _resolveFile(listFile.relativePath);
+        if (oldFile.existsSync()) {
+          oldFileToDelete = oldFile;
+        }
+      }
     } else {
-      final sanitizedTitle = NameSanitizer.sanitize(listFile.title);
       fileName = NameSanitizer.resolveCollision(
         sanitizedTitle,
         existingFileNames,
@@ -259,6 +305,11 @@ class LocalStorageDataSource {
     ));
 
     await _atomicWrite(targetFile, model.toJson());
+    if (oldFileToDelete != null && oldFileToDelete.path != targetFile.path) {
+      if (oldFileToDelete.existsSync()) {
+        oldFileToDelete.deleteSync();
+      }
+    }
     await _ensureInOrder(folderRel, model.id);
 
     if (indexManager != null) {

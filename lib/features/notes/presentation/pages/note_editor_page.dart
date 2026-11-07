@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_quill/flutter_quill.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_typography.dart';
+import '../../../explorer/domain/entities/entities.dart';
 import '../bloc/note_editor/note_editor_bloc.dart';
 import '../bloc/note_editor/note_editor_event.dart';
 import '../bloc/note_editor/note_editor_state.dart';
@@ -14,8 +14,15 @@ import '../widgets/formatting_toolbar.dart';
 
 class NoteEditorPage extends StatelessWidget {
   final String? noteId;
+  final String folderRelativePath;
+  final PageFile? initialPage;
 
-  const NoteEditorPage({super.key, this.noteId});
+  const NoteEditorPage({
+    super.key,
+    this.noteId,
+    this.folderRelativePath = '',
+    this.initialPage,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -23,6 +30,8 @@ class NoteEditorPage extends StatelessWidget {
       create: (_) => sl<NoteEditorBloc>()
         ..add(InitializeNote(
           noteId: (noteId == null || noteId == 'new') ? null : noteId,
+          folderRelativePath: folderRelativePath,
+          initialPage: initialPage,
         )),
       child: const _NoteEditorView(),
     );
@@ -36,141 +45,174 @@ class _NoteEditorView extends StatefulWidget {
   State<_NoteEditorView> createState() => _NoteEditorViewState();
 }
 
-class _NoteEditorViewState extends State<_NoteEditorView> {
+class _NoteEditorViewState extends State<_NoteEditorView>
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final TextEditingController _titleController;
-  late final TextEditingController _contentController;
-  final FocusNode _contentFocusNode = FocusNode();
-  Timer? _debounceTimer;
+  late QuillController _quillController;
+  final FocusNode _editorFocusNode = FocusNode();
+  final ScrollController _scrollController = ScrollController();
 
-  // Undo / Redo stacks
-  final List<String> _undoHistory = [];
-  final List<String> _redoHistory = [];
-  bool _isUndoingOrRedoing = false;
+  late AnimationController _heartAnimController;
+  late Animation<double> _heartScaleAnimation;
+
+  Timer? _debounceTimer;
+  bool _isConvertingAutoList = false;
+  bool _isInitialized = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _titleController = TextEditingController();
-    _contentController = TextEditingController();
+    _quillController = QuillController.basic();
 
-    _contentController.addListener(_onContentChanged);
+    _titleController.addListener(_onTextChanged);
+    _quillController.addListener(_onQuillChanged);
+
+    _heartAnimController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
+    _heartScaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.35), weight: 50),
+      TweenSequenceItem(tween: Tween(begin: 1.35, end: 1.0), weight: 50),
+    ]).animate(CurvedAnimation(
+      parent: _heartAnimController,
+      curve: Curves.easeInOut,
+    ));
   }
 
-  void _onContentChanged() {
-    if (_isUndoingOrRedoing) return;
-    final text = _contentController.text;
-    if (_undoHistory.isEmpty || _undoHistory.last != text) {
-      _undoHistory.add(text);
-      if (_undoHistory.length > 30) _undoHistory.removeAt(0);
-      _redoHistory.clear();
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+      _saveImmediate();
     }
   }
 
-  void _undo() {
-    if (_undoHistory.length > 1) {
-      _isUndoingOrRedoing = true;
-      final current = _undoHistory.removeLast();
-      _redoHistory.add(current);
-      final prev = _undoHistory.last;
-      _contentController.value = TextEditingValue(
-        text: prev,
-        selection: TextSelection.collapsed(offset: prev.length),
-      );
-      context.read<NoteEditorBloc>().add(UpdateContent(prev));
-      _scheduleAutoSave();
-      _isUndoingOrRedoing = false;
-      setState(() {});
-    }
+  void _onTextChanged() {
+    _scheduleAutoSave();
   }
 
-  void _redo() {
-    if (_redoHistory.isNotEmpty) {
-      _isUndoingOrRedoing = true;
-      final next = _redoHistory.removeLast();
-      _undoHistory.add(next);
-      _contentController.value = TextEditingValue(
-        text: next,
-        selection: TextSelection.collapsed(offset: next.length),
+  void _onQuillChanged() {
+    _checkAutoList();
+    _scheduleAutoSave();
+  }
+
+  void _checkAutoList() {
+    if (_isConvertingAutoList) return;
+    final selection = _quillController.selection;
+    if (!selection.isCollapsed || selection.baseOffset < 2) return;
+
+    final offset = selection.baseOffset;
+    final text = _quillController.document.toPlainText();
+    if (offset > text.length) return;
+
+    if (offset > 0 && text[offset - 1] != ' ') return;
+
+    final before = text.substring(0, offset);
+    final lastNewline = before.lastIndexOf('\n', offset - 2);
+    final lineStart = lastNewline == -1 ? 0 : lastNewline + 1;
+    final linePrefix = text.substring(lineStart, offset);
+
+    if (linePrefix == '1. ') {
+      _isConvertingAutoList = true;
+      _quillController.replaceText(lineStart, 3, '', null);
+      _quillController.updateSelection(
+        TextSelection.collapsed(offset: lineStart),
+        ChangeSource.local,
       );
-      context.read<NoteEditorBloc>().add(UpdateContent(next));
-      _scheduleAutoSave();
-      _isUndoingOrRedoing = false;
-      setState(() {});
+      _quillController.formatSelection(Attribute.ol);
+      _isConvertingAutoList = false;
+    } else if (linePrefix == '- ') {
+      _isConvertingAutoList = true;
+      _quillController.replaceText(lineStart, 2, '', null);
+      _quillController.updateSelection(
+        TextSelection.collapsed(offset: lineStart),
+        ChangeSource.local,
+      );
+      _quillController.formatSelection(Attribute.ul);
+      _isConvertingAutoList = false;
     }
   }
 
   void _scheduleAutoSave() {
     _debounceTimer?.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 700), () {
-      if (mounted) {
-        context.read<NoteEditorBloc>().add(const SaveNoteEvent());
-      }
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      _saveImmediate();
     });
   }
 
-  void _applyFormat(FormatAction action) {
-    final text = _contentController.text;
-    final selection = _contentController.selection;
-    final start = selection.start;
-    final end = selection.end;
+  void _saveImmediate() {
+    _debounceTimer?.cancel();
+    if (!mounted) return;
 
-    if (start < 0 || end < 0) return;
+    final title = _titleController.text;
+    final deltaOps = _quillController.document.toDelta().toJson();
+    final plainText = _quillController.document.toPlainText().trimRight();
 
-    final selectedText = text.substring(start, end);
-    String replacement = '';
-    int cursorOffset = 0;
-
-    switch (action) {
-      case FormatAction.bold:
-        replacement = '**$selectedText**';
-        cursorOffset = selectedText.isEmpty ? start + 2 : start + replacement.length;
-        break;
-      case FormatAction.italic:
-        replacement = '*$selectedText*';
-        cursorOffset = selectedText.isEmpty ? start + 1 : start + replacement.length;
-        break;
-      case FormatAction.underline:
-        replacement = '<u>$selectedText</u>';
-        cursorOffset = selectedText.isEmpty ? start + 3 : start + replacement.length;
-        break;
-      case FormatAction.strikethrough:
-        replacement = '~~$selectedText~~';
-        cursorOffset = selectedText.isEmpty ? start + 2 : start + replacement.length;
-        break;
-      case FormatAction.heading:
-        replacement = '\n# $selectedText';
-        cursorOffset = start + replacement.length;
-        break;
-      case FormatAction.bulletList:
-        replacement = '\n• $selectedText';
-        cursorOffset = start + replacement.length;
-        break;
-      case FormatAction.numberedList:
-        replacement = '\n1. $selectedText';
-        cursorOffset = start + replacement.length;
-        break;
-      case FormatAction.checklist:
-        replacement = '\n- [ ] $selectedText';
-        cursorOffset = start + replacement.length;
-        break;
+    if (title.trim().isEmpty && plainText.trim().isEmpty) {
+      return;
     }
 
-    final newText = text.replaceRange(start, end, replacement);
-    _contentController.value = TextEditingValue(
-      text: newText,
-      selection: TextSelection.collapsed(offset: cursorOffset.clamp(0, newText.length)),
-    );
-    context.read<NoteEditorBloc>().add(UpdateContent(newText));
-    _scheduleAutoSave();
+    final bloc = context.read<NoteEditorBloc>();
+    bloc.add(UpdateTitle(title));
+    bloc.add(UpdateContentDelta(content: deltaOps, plainText: plainText));
+    bloc.add(const SaveNoteEvent());
+  }
+
+  void _onExit() {
+    _debounceTimer?.cancel();
+    final title = _titleController.text;
+    final plainText = _quillController.document.toPlainText().trimRight();
+
+    if (title.trim().isEmpty && plainText.trim().isEmpty) {
+      context.read<NoteEditorBloc>().add(const DiscardEmptyNoteEvent());
+    } else {
+      _saveImmediate();
+    }
+  }
+
+  void _copyPlainText() async {
+    final plainText = _quillController.document.toPlainText().trimRight();
+    final title = _titleController.text.trim();
+    final textToCopy = title.isNotEmpty ? '$title\n\n$plainText' : plainText;
+
+    await Clipboard.setData(ClipboardData(text: textToCopy));
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Disalin'),
+          duration: Duration(milliseconds: 1500),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  void _toggleFavorite() {
+    _heartAnimController.forward(from: 0.0);
+    context.read<NoteEditorBloc>().add(const TogglePinInEditor());
+  }
+
+  void _handleBack() {
+    _onExit();
+    final nav = Navigator.maybeOf(context);
+    if (nav != null && nav.canPop()) {
+      nav.pop();
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _debounceTimer?.cancel();
-    _contentController.removeListener(_onContentChanged);
+    _titleController.removeListener(_onTextChanged);
+    _quillController.removeListener(_onQuillChanged);
     _titleController.dispose();
-    _contentController.dispose();
-    _contentFocusNode.dispose();
+    _quillController.dispose();
+    _editorFocusNode.dispose();
+    _scrollController.dispose();
+    _heartAnimController.dispose();
     super.dispose();
   }
 
@@ -178,22 +220,27 @@ class _NoteEditorViewState extends State<_NoteEditorView> {
   Widget build(BuildContext context) {
     return BlocConsumer<NoteEditorBloc, NoteEditorState>(
       listener: (context, state) {
-        if (state is NoteEditorLoaded) {
-          if (_titleController.text != state.note.title && !_titleController.value.composing.isValid) {
+        if (state is NoteEditorLoaded && !_isInitialized) {
+          _isInitialized = true;
+          if (_titleController.text != state.note.title) {
             _titleController.text = state.note.title;
           }
-          if (_contentController.text != state.note.plainText && !_contentController.value.composing.isValid) {
-            _contentController.text = state.note.plainText;
-            if (_undoHistory.isEmpty) {
-              _undoHistory.add(state.note.plainText);
-            }
+
+          if (state.note.content.isNotEmpty) {
+            try {
+              final doc = Document.fromJson(state.note.content);
+              _quillController.document = doc;
+            } catch (_) {}
+          } else if (state.note.plainText.isNotEmpty) {
+            _quillController.document.insert(0, state.note.plainText);
           }
+          setState(() {});
         }
       },
       builder: (context, state) {
         if (state is NoteEditorLoading || state is NoteEditorInitial) {
           return const Scaffold(
-            backgroundColor: AppColors.background,
+            backgroundColor: Colors.white,
             body: Center(
               child: CircularProgressIndicator(color: AppColors.textPrimary),
             ),
@@ -202,12 +249,17 @@ class _NoteEditorViewState extends State<_NoteEditorView> {
 
         if (state is NoteEditorError) {
           return Scaffold(
-            backgroundColor: AppColors.background,
+            backgroundColor: Colors.white,
             appBar: AppBar(
-              backgroundColor: AppColors.background,
+              backgroundColor: Colors.white,
               leading: IconButton(
-                icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-                onPressed: () => context.pop(),
+                icon: const Icon(Icons.arrow_back_rounded, color: AppColors.textPrimary),
+                onPressed: () {
+                  final nav = Navigator.maybeOf(context);
+                  if (nav != null && nav.canPop()) {
+                    nav.pop();
+                  }
+                },
               ),
             ),
             body: Center(child: Text(state.message)),
@@ -215,162 +267,190 @@ class _NoteEditorViewState extends State<_NoteEditorView> {
         }
 
         final loaded = state as NoteEditorLoaded;
-        final note = loaded.note;
-        final wordsCount = note.plainText.trim().isEmpty
-            ? 0
-            : note.plainText.trim().split(RegExp(r'\s+')).length;
-        final updatedFormatted = DateFormat('MMM d, h:mm a').format(note.updatedAt);
+        final isFavorite = loaded.note.isFavorite;
 
         return PopScope(
           canPop: true,
           onPopInvokedWithResult: (didPop, result) {
-            context.read<NoteEditorBloc>().add(const SaveNoteEvent());
+            _onExit();
           },
           child: Scaffold(
-            backgroundColor: AppColors.background,
+            backgroundColor: Colors.white,
+            resizeToAvoidBottomInset: true,
             body: SafeArea(
               child: Stack(
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Top Bar
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                        child: Row(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.arrow_back, color: AppColors.textPrimary),
-                              onPressed: () {
-                                context.read<NoteEditorBloc>().add(const SaveNoteEvent());
-                                context.pop();
-                              },
-                            ),
-                            const Spacer(),
-                            // Auto-save status
-                            Text(
-                              loaded.isSaving
-                                  ? 'Saving...'
-                                  : loaded.isDirty
-                                      ? 'Unsaved'
-                                      : 'Saved',
-                              style: AppTypography.caption.copyWith(
-                                color: loaded.isSaving
-                                    ? AppColors.textSecondary
-                                    : (loaded.isDirty ? Colors.orange : AppColors.textSecondary),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            // Undo
-                            IconButton(
-                              icon: const Icon(Icons.undo, color: AppColors.textPrimary, size: 20),
-                              tooltip: 'Undo',
-                              onPressed: _undoHistory.length > 1 ? _undo : null,
-                            ),
-                            // Redo
-                            IconButton(
-                              icon: const Icon(Icons.redo, color: AppColors.textPrimary, size: 20),
-                              tooltip: 'Redo',
-                              onPressed: _redoHistory.isNotEmpty ? _redo : null,
-                            ),
-                            // Pin toggle
-                            IconButton(
-                              icon: Icon(
-                                note.isFavorite ? Icons.favorite : Icons.favorite_border,
-                                color: note.isFavorite ? AppColors.textPrimary : AppColors.textSecondary,
-                                size: 20,
-                              ),
-                              tooltip: note.isFavorite ? 'Unfavorite' : 'Favorite',
-                              onPressed: () {
-                                context.read<NoteEditorBloc>().add(const TogglePinInEditor());
-                              },
-                            ),
-                          ],
-                        ),
+                  // Main Scrollable Area
+                  Positioned.fill(
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(
+                        AppConstants.screenMargin,
+                        68,
+                        AppConstants.screenMargin,
+                        100,
                       ),
-                      // Metadata Bar
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppConstants.screenMargin,
-                        ),
-                        child: Text(
-                          '$updatedFormatted | $wordsCount words',
-                          style: AppTypography.caption.copyWith(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      // Title TextField
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppConstants.screenMargin,
-                        ),
-                        child: TextField(
-                          controller: _titleController,
-                          style: AppTypography.heading1.copyWith(
-                            fontSize: 26,
-                            color: AppColors.editorTitle,
-                          ),
-                          decoration: InputDecoration(
-                            hintText: 'Title',
-                            hintStyle: AppTypography.heading1.copyWith(
-                              fontSize: 26,
-                              color: AppColors.textSecondary.withValues(alpha: 0.5),
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.zero,
-                          ),
-                          onChanged: (val) {
-                            context.read<NoteEditorBloc>().add(UpdateTitle(val));
-                            _scheduleAutoSave();
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      // Content TextField
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppConstants.screenMargin,
-                          ),
-                          child: TextField(
-                            controller: _contentController,
-                            focusNode: _contentFocusNode,
-                            style: AppTypography.body.copyWith(
-                              fontSize: 16,
-                              color: AppColors.editorBody,
-                              height: 1.5,
-                            ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Title (Large, Bold, Multi-line)
+                          TextField(
+                            key: const Key('note_title_input'),
+                            controller: _titleController,
                             maxLines: null,
-                            expands: true,
                             keyboardType: TextInputType.multiline,
-                            decoration: InputDecoration(
-                              hintText: 'Start typing...',
-                              hintStyle: AppTypography.body.copyWith(
-                                fontSize: 16,
-                                color: AppColors.textSecondary.withValues(alpha: 0.5),
+                            textInputAction: TextInputAction.next,
+                            style: const TextStyle(
+                              fontSize: 34,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF111111),
+                              height: 1.15,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'Tanpa judul',
+                              hintStyle: TextStyle(
+                                fontSize: 34,
+                                fontWeight: FontWeight.bold,
+                                color: Color(0xFF8A8A8A),
+                                height: 1.15,
                               ),
                               border: InputBorder.none,
-                              contentPadding: const EdgeInsets.only(bottom: 80),
+                              contentPadding: EdgeInsets.zero,
                             ),
-                            onChanged: (val) {
-                              context.read<NoteEditorBloc>().add(UpdateContent(val));
-                              _scheduleAutoSave();
-                            },
                           ),
-                        ),
+                          const SizedBox(height: 16),
+
+                          // Rich Text Quill Editor
+                          QuillEditor.basic(
+                            controller: _quillController,
+                            focusNode: _editorFocusNode,
+                            config: const QuillEditorConfig(
+                              scrollable: false,
+                              autoFocus: false,
+                              expands: false,
+                              placeholder: 'Mulai mengetik...',
+                            ),
+                          ),
+
+                          // Bottom tap target for focusing editor
+                          GestureDetector(
+                            behavior: HitTestBehavior.translucent,
+                            onTap: () => _editorFocusNode.requestFocus(),
+                            child: const SizedBox(height: 200),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
-                  // Floating Formatting Toolbar (Figma node 3:208)
+
+                  // Pinned Header & Gradient Scroll Fade
                   Positioned(
+                    top: 0,
                     left: 0,
                     right: 0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Header
+                        Container(
+                          height: 56,
+                          color: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: Row(
+                            children: [
+                              IconButton(
+                                key: const Key('editor_back_button'),
+                                icon: const Icon(
+                                  Icons.arrow_back_rounded,
+                                  color: Color(0xFF111111),
+                                  size: 24,
+                                ),
+                                tooltip: 'Kembali',
+                                onPressed: _handleBack,
+                              ),
+                              const Spacer(),
+                              // Clipboard action
+                              IconButton(
+                                key: const Key('editor_copy_button'),
+                                icon: const Icon(
+                                  Icons.content_copy_rounded,
+                                  color: Color(0xFF111111),
+                                  size: 22,
+                                ),
+                                tooltip: 'Salin teks',
+                                onPressed: _copyPlainText,
+                              ),
+                              // Favorite heart toggle with pop animation
+                              ScaleTransition(
+                                scale: _heartScaleAnimation,
+                                child: IconButton(
+                                  key: const Key('editor_favorite_button'),
+                                  icon: Icon(
+                                    isFavorite
+                                        ? Icons.favorite_rounded
+                                        : Icons.favorite_border_rounded,
+                                    color: isFavorite
+                                        ? const Color(0xFFE53935)
+                                        : const Color(0xFF111111),
+                                    size: 24,
+                                  ),
+                                  tooltip: isFavorite ? 'Hapus favorit' : 'Favorit',
+                                  onPressed: _toggleFavorite,
+                                ),
+                              ),
+                              // Share action (placeholder for M8)
+                              IconButton(
+                                key: const Key('editor_share_button'),
+                                icon: const Icon(
+                                  Icons.share_rounded,
+                                  color: Color(0xFF111111),
+                                  size: 22,
+                                ),
+                                tooltip: 'Bagikan',
+                                onPressed: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Fitur bagikan akan hadir di M8'),
+                                      duration: Duration(seconds: 1),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Gradient fade below header (without BackdropFilter)
+                        IgnorePointer(
+                          child: Container(
+                            height: 16,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.white,
+                                  Colors.white.withValues(alpha: 0.0),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // Floating Format Toolbar (appears ONLY when text is selected)
+                  Positioned(
+                    left: 16,
+                    right: 16,
                     bottom: 16,
-                    child: FormattingToolbar(
-                      onFormat: _applyFormat,
+                    child: Center(
+                      child: FormattingToolbar(
+                        controller: _quillController,
+                      ),
                     ),
                   ),
                 ],
@@ -382,3 +462,4 @@ class _NoteEditorViewState extends State<_NoteEditorView> {
     );
   }
 }
+

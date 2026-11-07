@@ -18,6 +18,7 @@ import '../widgets/home_header.dart';
 import '../widgets/note_card.dart';
 import '../widgets/notes_empty_state.dart';
 import 'editor_placeholder_page.dart';
+import 'note_editor_page.dart';
 
 class HomePage extends StatelessWidget {
   final String folderRelativePath;
@@ -108,6 +109,20 @@ class HomePage extends StatelessWidget {
   }
 
   Future<void> _openEditor(BuildContext context, String fileType) async {
+    if (fileType == 'Page') {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => NoteEditorPage(
+            folderRelativePath: folderRelativePath,
+          ),
+        ),
+      );
+      if (context.mounted) {
+        context.read<NoteListBloc>().add(LoadNotes(folderRelativePath: folderRelativePath));
+      }
+      return;
+    }
+
     final saved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => EditorPlaceholderPage(

@@ -49,7 +49,11 @@ class AppRouter {
         name: 'note-editor',
         builder: (context, state) {
           final noteId = state.pathParameters['id'];
-          return NoteEditorPage(noteId: noteId);
+          final folder = state.uri.queryParameters['folder'] ?? '';
+          return NoteEditorPage(
+            noteId: noteId,
+            folderRelativePath: folder,
+          );
         },
       ),
     ],

@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../../explorer/domain/entities/entities.dart';
 
 abstract class NoteEditorEvent extends Equatable {
   const NoteEditorEvent();
@@ -9,11 +10,17 @@ abstract class NoteEditorEvent extends Equatable {
 
 class InitializeNote extends NoteEditorEvent {
   final String? noteId;
+  final String folderRelativePath;
+  final PageFile? initialPage;
 
-  const InitializeNote({this.noteId});
+  const InitializeNote({
+    this.noteId,
+    this.folderRelativePath = '',
+    this.initialPage,
+  });
 
   @override
-  List<Object?> get props => [noteId];
+  List<Object?> get props => [noteId, folderRelativePath, initialPage];
 }
 
 class UpdateTitle extends NoteEditorEvent {
@@ -23,6 +30,19 @@ class UpdateTitle extends NoteEditorEvent {
 
   @override
   List<Object?> get props => [title];
+}
+
+class UpdateContentDelta extends NoteEditorEvent {
+  final List<dynamic> content;
+  final String plainText;
+
+  const UpdateContentDelta({
+    required this.content,
+    required this.plainText,
+  });
+
+  @override
+  List<Object?> get props => [content, plainText];
 }
 
 class UpdateContent extends NoteEditorEvent {
@@ -40,6 +60,10 @@ class SaveNoteEvent extends NoteEditorEvent {
 
 class TogglePinInEditor extends NoteEditorEvent {
   const TogglePinInEditor();
+}
+
+class DiscardEmptyNoteEvent extends NoteEditorEvent {
+  const DiscardEmptyNoteEvent();
 }
 
 class SetReminderInEditor extends NoteEditorEvent {

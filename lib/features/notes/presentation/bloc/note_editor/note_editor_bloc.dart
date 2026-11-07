@@ -8,13 +8,16 @@ import 'note_editor_state.dart';
 class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
   final ExplorerRepository repository;
   final Uuid _uuid = const Uuid();
+  String _folderRelativePath = '';
 
   NoteEditorBloc({required this.repository}) : super(NoteEditorInitial()) {
     on<InitializeNote>(_onInitializeNote);
     on<UpdateTitle>(_onUpdateTitle);
+    on<UpdateContentDelta>(_onUpdateContentDelta);
     on<UpdateContent>(_onUpdateContent);
     on<SaveNoteEvent>(_onSaveNote);
     on<TogglePinInEditor>(_onTogglePin);
+    on<DiscardEmptyNoteEvent>(_onDiscardEmptyNote);
     on<SetReminderInEditor>(_onSetReminder);
   }
 
@@ -22,19 +25,27 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
     InitializeNote event,
     Emitter<NoteEditorState> emit,
   ) async {
+    _folderRelativePath = event.folderRelativePath;
     emit(NoteEditorLoading());
     try {
-      if (event.noteId != null) {
-        final contents = await repository.getFolderContents('');
-        for (final entry in contents) {
-          if (entry.id == event.noteId && entry is PageFile) {
-            emit(NoteEditorLoaded(
-              note: entry,
-              isNew: false,
-              isDirty: false,
-            ));
-            return;
-          }
+      if (event.initialPage != null) {
+        emit(NoteEditorLoaded(
+          note: event.initialPage!,
+          isNew: false,
+          isDirty: false,
+        ));
+        return;
+      }
+
+      if (event.noteId != null && event.noteId != 'new' && event.noteId!.isNotEmpty) {
+        final found = await _findPageById('', event.noteId!);
+        if (found != null) {
+          emit(NoteEditorLoaded(
+            note: found,
+            isNew: false,
+            isDirty: false,
+          ));
+          return;
         }
       }
 
@@ -48,6 +59,7 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
         favoritedAt: null,
         createdAt: now,
         updatedAt: now,
+        content: const [],
       );
       emit(NoteEditorLoaded(
         note: freshNote,
@@ -59,6 +71,19 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
     }
   }
 
+  Future<PageFile?> _findPageById(String folderRel, String id) async {
+    final contents = await repository.getFolderContents(folderRel);
+    for (final entry in contents) {
+      if (entry is PageFile && entry.id == id) {
+        return entry;
+      } else if (entry is Folder) {
+        final sub = await _findPageById(entry.relativePath, id);
+        if (sub != null) return sub;
+      }
+    }
+    return null;
+  }
+
   void _onUpdateTitle(
     UpdateTitle event,
     Emitter<NoteEditorState> emit,
@@ -68,6 +93,23 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
       emit(current.copyWith(
         note: current.note.copyWith(
           title: event.title,
+          updatedAt: DateTime.now(),
+        ),
+        isDirty: true,
+      ));
+    }
+  }
+
+  void _onUpdateContentDelta(
+    UpdateContentDelta event,
+    Emitter<NoteEditorState> emit,
+  ) {
+    if (state is NoteEditorLoaded) {
+      final current = state as NoteEditorLoaded;
+      emit(current.copyWith(
+        note: current.note.copyWith(
+          content: event.content,
+          plainText: event.plainText,
           updatedAt: DateTime.now(),
         ),
         isDirty: true,
@@ -108,7 +150,11 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
       emit(current.copyWith(isSaving: true));
       try {
         final toSave = current.note.copyWith(updatedAt: DateTime.now());
-        final saved = await repository.savePage(toSave);
+        final targetFolder = current.note.relativePath.isEmpty ? _folderRelativePath : null;
+        final saved = await repository.savePage(
+          toSave,
+          targetFolderRelativePath: targetFolder,
+        );
         emit(current.copyWith(
           note: saved,
           isSaving: false,
@@ -121,20 +167,46 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
     }
   }
 
+  Future<void> _onDiscardEmptyNote(
+    DiscardEmptyNoteEvent event,
+    Emitter<NoteEditorState> emit,
+  ) async {
+    if (state is NoteEditorLoaded) {
+      final current = state as NoteEditorLoaded;
+      if (current.note.relativePath.isNotEmpty) {
+        try {
+          await repository.deleteEntry(current.note);
+        } catch (_) {}
+      }
+    }
+  }
+
   Future<void> _onTogglePin(
     TogglePinInEditor event,
     Emitter<NoteEditorState> emit,
   ) async {
     if (state is NoteEditorLoaded) {
       final current = state as NoteEditorLoaded;
-      try {
-        final updated = await repository.toggleFavorite(current.note);
-        if (updated is PageFile) {
-          emit(current.copyWith(note: updated, isDirty: false));
+      final newFav = current.note.favoritedAt == null ? DateTime.now() : null;
+      final updatedNote = current.note.copyWith(
+        favoritedAt: newFav,
+        clearFavoritedAt: newFav == null,
+      );
+
+      if (current.note.relativePath.isNotEmpty) {
+        try {
+          final saved = await repository.toggleFavorite(current.note);
+          if (saved is PageFile) {
+            emit(current.copyWith(note: saved, isDirty: false));
+            return;
+          }
+        } catch (e) {
+          emit(NoteEditorError(e.toString()));
+          return;
         }
-      } catch (e) {
-        emit(NoteEditorError(e.toString()));
       }
+
+      emit(current.copyWith(note: updatedNote, isDirty: true));
     }
   }
 
