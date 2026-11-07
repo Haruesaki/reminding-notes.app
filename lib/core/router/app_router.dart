@@ -3,10 +3,12 @@ import 'package:go_router/go_router.dart';
 import '../di/injection_container.dart';
 import '../../features/notes/presentation/bloc/note_list/note_list_bloc.dart';
 import '../../features/notes/presentation/bloc/note_list/note_list_event.dart';
+import '../../features/notes/presentation/cubit/deadline_calendar_cubit.dart';
 import '../../features/notes/presentation/pages/editor_placeholder_page.dart';
 import '../../features/notes/presentation/pages/home_page.dart';
 import '../../features/notes/presentation/pages/list_editor_page.dart';
 import '../../features/notes/presentation/pages/note_editor_page.dart';
+import '../../features/notes/presentation/pages/reminders_page.dart';
 
 class AppRouter {
   // Routes for Home, Folder, and Note Editor screens
@@ -16,8 +18,16 @@ class AppRouter {
       GoRoute(
         path: '/',
         name: 'home',
-        builder: (context, state) => BlocProvider(
-          create: (_) => sl<NoteListBloc>()..add(const LoadNotes()),
+        builder: (context, state) => MultiBlocProvider(
+          providers: [
+            BlocProvider(
+              create: (_) => sl<NoteListBloc>()..add(const LoadNotes()),
+            ),
+            BlocProvider(
+              create: (_) =>
+                  sl<DeadlineCalendarCubit>()..loadDeadlines(),
+            ),
+          ],
           child: const HomePage(),
         ),
       ),
@@ -26,9 +36,17 @@ class AppRouter {
         name: 'folder',
         builder: (context, state) {
           final folderPath = state.uri.queryParameters['path'] ?? '';
-          return BlocProvider(
-            create: (_) =>
-                sl<NoteListBloc>()..add(LoadNotes(folderRelativePath: folderPath)),
+          return MultiBlocProvider(
+            providers: [
+              BlocProvider(
+                create: (_) => sl<NoteListBloc>()
+                  ..add(LoadNotes(folderRelativePath: folderPath)),
+              ),
+              BlocProvider(
+                create: (_) =>
+                    sl<DeadlineCalendarCubit>()..loadDeadlines(),
+              ),
+            ],
             child: HomePage(folderRelativePath: folderPath),
           );
         },
@@ -68,6 +86,14 @@ class AppRouter {
             folderRelativePath: folder,
           );
         },
+      ),
+      GoRoute(
+        path: '/reminders',
+        name: 'reminders',
+        builder: (context, state) => BlocProvider(
+          create: (_) => sl<DeadlineCalendarCubit>()..loadDeadlines(),
+          child: const RemindersPage(),
+        ),
       ),
     ],
   );

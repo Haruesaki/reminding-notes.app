@@ -17,21 +17,6 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     on<CreateFolderEvent>(_onCreateFolder);
   }
 
-  bool _matchesDate(FileEntry file, DateTime date) {
-    if (file is ListFile) {
-      if (file.tasks.any((t) =>
-          t.deadline != null &&
-          t.deadline!.at.year == date.year &&
-          t.deadline!.at.month == date.month &&
-          t.deadline!.at.day == date.day)) {
-        return true;
-      }
-    }
-    return file.updatedAt.year == date.year &&
-        file.updatedAt.month == date.month &&
-        file.updatedAt.day == date.day;
-  }
-
   Future<({List<Folder> folders, List<FileEntry> files})> _fetchFilteredContent({
     String folderRelativePath = '',
     DateTime? selectedDate,
@@ -77,11 +62,17 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     }
 
     if (selectedDate != null) {
-      final hasAnyDeadline = files.any(
-          (f) => f is ListFile && f.tasks.any((t) => t.deadline != null));
-      if (hasAnyDeadline) {
-        files = files.where((f) => _matchesDate(f, selectedDate)).toList();
-      }
+      folders = [];
+      files = files.where((f) {
+        if (f is ListFile) {
+          return f.tasks.any((t) =>
+              t.deadline != null &&
+              t.deadline!.at.year == selectedDate.year &&
+              t.deadline!.at.month == selectedDate.month &&
+              t.deadline!.at.day == selectedDate.day);
+        }
+        return false;
+      }).toList();
     }
 
     return (folders: folders, files: files);

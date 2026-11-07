@@ -15,4 +15,5 @@ abstract class ExplorerRepository {
   Future<FileEntry> copyFile({required FileEntry file, required String destinationFolderRelativePath});
   Future<FileEntry> toggleFavorite(FileEntry file);
   Future<void> saveOrder({required String folderRelativePath, required List<String> newOrder});
+  Future<List<DeadlineItem>> getAllDeadlines();
 }

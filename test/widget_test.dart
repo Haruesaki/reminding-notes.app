@@ -21,12 +21,16 @@ void main() {
 
   tearDown(() async {
     await sl.reset();
-    if (await tempDir.exists()) {
-      await tempDir.delete(recursive: true);
-    }
-    if (await tempSupportDir.exists()) {
-      await tempSupportDir.delete(recursive: true);
-    }
+    try {
+      if (await tempDir.exists()) {
+        await tempDir.delete(recursive: true);
+      }
+    } catch (_) {}
+    try {
+      if (await tempSupportDir.exists()) {
+        await tempSupportDir.delete(recursive: true);
+      }
+    } catch (_) {}
   });
 
   testWidgets('RemindingApp boots and displays Home screen components', (tester) async {

@@ -10,6 +10,7 @@ import '../../../explorer/domain/entities/entities.dart';
 import '../bloc/note_list/note_list_bloc.dart';
 import '../bloc/note_list/note_list_event.dart';
 import '../bloc/note_list/note_list_state.dart';
+import '../cubit/deadline_calendar_cubit.dart';
 import '../widgets/balloon_fab_menu.dart';
 import '../widgets/category_filter_chips.dart';
 import '../widgets/date_selector_strip.dart';
@@ -119,6 +120,9 @@ class HomePage extends StatelessWidget {
         ),
       );
       if (context.mounted) {
+        try {
+          context.read<DeadlineCalendarCubit>().loadDeadlines();
+        } catch (_) {}
         context.read<NoteListBloc>().add(LoadNotes(folderRelativePath: folderRelativePath));
       }
       return;
@@ -133,6 +137,9 @@ class HomePage extends StatelessWidget {
         ),
       );
       if (context.mounted) {
+        try {
+          context.read<DeadlineCalendarCubit>().loadDeadlines();
+        } catch (_) {}
         context.read<NoteListBloc>().add(LoadNotes(folderRelativePath: folderRelativePath));
       }
       return;
@@ -184,6 +191,13 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isFolder = folderRelativePath.isNotEmpty;
+    final deadlineState = (() {
+      try {
+        return context.watch<DeadlineCalendarCubit>().state;
+      } catch (_) {
+        return null;
+      }
+    })();
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -238,6 +252,8 @@ class HomePage extends StatelessWidget {
                                 HomeHeader(
                                   searchQuery: searchQuery,
                                   showBackButton: isFolder,
+                                  hasUrgentDeadline:
+                                      deadlineState?.hasUrgentDeadline ?? false,
                                   onBackTap: () => Navigator.of(context).maybePop(),
                                   onQueryChanged: (query) {
                                     context
@@ -247,7 +263,23 @@ class HomePage extends StatelessWidget {
                                   onBurgerTap: () {
                                     // TODO: M9 - Buka drawer explorer / navigasi
                                   },
-                                  onNotificationTap: () {},
+                                  onNotificationTap: () {
+                                    context.push('/reminders').then((_) {
+                                      if (context.mounted) {
+                                        try {
+                                          context
+                                              .read<DeadlineCalendarCubit>()
+                                              .loadDeadlines();
+                                        } catch (_) {}
+                                        context.read<NoteListBloc>().add(
+                                              LoadNotes(
+                                                folderRelativePath:
+                                                    folderRelativePath,
+                                              ),
+                                            );
+                                      }
+                                    });
+                                  },
                                 ),
                                 if (isFolder) ...[
                                   _buildFolderHeader(folderRelativePath),
@@ -255,6 +287,8 @@ class HomePage extends StatelessWidget {
                                   const SizedBox(height: 18),
                                   DateSelectorStrip(
                                     selectedDate: selectedDate,
+                                    dateColors: deadlineState?.dateColors,
+                                    dateDotColors: deadlineState?.dateDotColors,
                                     onDateSelected: (date) {
                                       context
                                           .read<NoteListBloc>()
@@ -411,6 +445,11 @@ class HomePage extends StatelessWidget {
                         await context.push('/note/${item.file.id}');
                       }
                       if (context.mounted) {
+                        try {
+                          context
+                              .read<DeadlineCalendarCubit>()
+                              .loadDeadlines();
+                        } catch (_) {}
                         context
                             .read<NoteListBloc>()
                             .add(LoadNotes(folderRelativePath: folderRelativePath));

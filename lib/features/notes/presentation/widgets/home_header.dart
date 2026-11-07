@@ -12,6 +12,7 @@ class HomeHeader extends StatelessWidget {
   final VoidCallback? onNotificationTap;
   final bool showBackButton;
   final VoidCallback? onBackTap;
+  final bool hasUrgentDeadline;
 
   const HomeHeader({
     super.key,
@@ -21,6 +22,7 @@ class HomeHeader extends StatelessWidget {
     this.onNotificationTap,
     this.showBackButton = false,
     this.onBackTap,
+    this.hasUrgentDeadline = false,
   });
 
   @override
@@ -79,18 +81,20 @@ class HomeHeader extends StatelessWidget {
                     size: 22,
                     color: AppColors.textPrimary,
                   ),
-                  Positioned(
-                    top: 10,
-                    right: 11,
-                    child: Container(
-                      width: 7,
-                      height: 7,
-                      decoration: const BoxDecoration(
-                        color: AppColors.notificationDot,
-                        shape: BoxShape.circle,
+                  if (hasUrgentDeadline)
+                    Positioned(
+                      top: 10,
+                      right: 11,
+                      child: Container(
+                        key: const Key('bellUrgentDot'),
+                        width: 7,
+                        height: 7,
+                        decoration: const BoxDecoration(
+                          color: AppColors.notificationDot,
+                          shape: BoxShape.circle,
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),

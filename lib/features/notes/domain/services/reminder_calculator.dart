@@ -108,6 +108,32 @@ class ReminderCalculator {
     }
   }
 
+  /// Status deadline pada tanggal kalender (PRD 7.1):
+  /// - selisih tanggal dari hari ini < 3 hari (termasuk overdue) = urgent (merah)
+  /// - selisih tanggal dari hari ini > 7 hari = relaxed (hijau)
+  /// - 3-7 hari = neutral (netral)
+  /// - task yang sudah dicentang tidak dihitung (hasUndoneTask == false -> null)
+  static DeadlineBadgeStatus? calculateDateDeadlineStatus({
+    required DateTime targetDate,
+    required DateTime now,
+    required bool hasUndoneTask,
+  }) {
+    if (!hasUndoneTask) {
+      return null;
+    }
+    final targetMidnight = DateTime(targetDate.year, targetDate.month, targetDate.day);
+    final nowMidnight = DateTime(now.year, now.month, now.day);
+    final daysDiff = targetMidnight.difference(nowMidnight).inDays;
+
+    if (daysDiff < 3) {
+      return DeadlineBadgeStatus.urgent;
+    } else if (daysDiff > 7) {
+      return DeadlineBadgeStatus.relaxed;
+    } else {
+      return DeadlineBadgeStatus.neutral;
+    }
+  }
+
   /// Format teks lencana deadline, misal: "12 Nov, 20:00"
   static String formatDeadlineBadge(DateTime deadline) {
     return DateFormat('d MMM, HH:mm', 'id_ID').format(deadline);

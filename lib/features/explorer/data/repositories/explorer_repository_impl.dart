@@ -109,4 +109,28 @@ class ExplorerRepositoryImpl implements ExplorerRepository {
       newOrder: newOrder,
     );
   }
+
+  @override
+  Future<List<DeadlineItem>> getAllDeadlines() async {
+    final indexManager = localDataSource.indexManager;
+    if (indexManager == null) return [];
+    var data = await indexManager.loadIndex();
+    if (data.files.isEmpty && data.deadlines.isEmpty) {
+      data = await indexManager.rebuildIndex(localDataSource.rootDir);
+    }
+    final fileMap = {for (final f in data.files) f.id: f};
+    return data.deadlines.map((d) {
+      final file = fileMap[d.fileId];
+      return DeadlineItem(
+        taskId: d.taskId,
+        fileId: d.fileId,
+        taskText: d.taskText,
+        fileTitle: file?.title ?? 'Catatan',
+        fileRelativePath: file?.relativePath ?? '',
+        fileType: file?.type ?? 'list',
+        at: d.at,
+        done: d.done,
+      );
+    }).toList();
+  }
 }

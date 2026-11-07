@@ -1,4 +1,5 @@
 export 'alarm_settings.dart';
+export 'deadline_item.dart';
 export 'deadline_settings.dart';
 export 'folder.dart';
 export 'list_file.dart';
