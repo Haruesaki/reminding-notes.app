@@ -10,6 +10,7 @@ import '../../features/notes/presentation/pages/home_page.dart';
 import '../../features/notes/presentation/pages/list_editor_page.dart';
 import '../../features/notes/presentation/pages/note_editor_page.dart';
 import '../../features/notes/presentation/pages/reminders_page.dart';
+import '../../features/settings/presentation/pages/settings_page.dart';
 
 class AppRouter {
   // Routes for Home, Folder, and Note Editor screens
@@ -101,6 +102,11 @@ class AppRouter {
           create: (_) => sl<DeadlineCalendarCubit>()..loadDeadlines(),
           child: const RemindersPage(),
         ),
+      ),
+      GoRoute(
+        path: '/settings',
+        name: 'settings',
+        builder: (context, state) => const SettingsPage(),
       ),
     ],
   );

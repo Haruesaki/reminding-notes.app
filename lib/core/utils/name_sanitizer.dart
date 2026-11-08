@@ -68,4 +68,29 @@ class NameSanitizer {
       counter++;
     }
   }
+
+  /// Menangani bentrok nama khusus saat impor (PRD 7.11):
+  /// Menambahkan " (Impor)", " (Impor 2)", dst.
+  static String resolveImportCollision(
+    String baseName,
+    Iterable<String> existingNames, {
+    String extension = '',
+  }) {
+    final lowerExisting = existingNames.map((e) => e.toLowerCase()).toSet();
+    final ext = extension.isEmpty ? '' : (extension.startsWith('.') ? extension : '.$extension');
+
+    final candidate = '$baseName (Impor)$ext';
+    if (!lowerExisting.contains(candidate.toLowerCase())) {
+      return candidate;
+    }
+
+    int counter = 2;
+    while (true) {
+      final numberedCandidate = '$baseName (Impor $counter)$ext';
+      if (!lowerExisting.contains(numberedCandidate.toLowerCase())) {
+        return numberedCandidate;
+      }
+      counter++;
+    }
+  }
 }

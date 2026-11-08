@@ -423,8 +423,42 @@ class HomePage extends StatelessWidget {
     final isCopyMoveMode = copyMoveState is CopyMoveActive;
     final pendingEntryId =
         copyMoveState is CopyMoveActive ? copyMoveState.entry.id : null;
+    final scaffoldKey = GlobalKey<ScaffoldState>();
 
     return Scaffold(
+      key: scaffoldKey,
+      drawer: Drawer(
+        backgroundColor: AppColors.background,
+        child: SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 16.0),
+                child: Text(
+                  'Notes',
+                  style: AppTypography.heading1,
+                ),
+              ),
+              const Divider(height: 1, thickness: 1, color: AppColors.borderLight),
+              ListTile(
+                leading: const Icon(Icons.settings_outlined, color: AppColors.textPrimary),
+                title: const Text('Pengaturan', style: AppTypography.body),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  context.push('/settings').then((_) {
+                    if (context.mounted) {
+                      context.read<NoteListBloc>().add(
+                            LoadNotes(folderRelativePath: folderRelativePath),
+                          );
+                    }
+                  });
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
       backgroundColor: AppColors.background,
       body: Stack(
         children: [
@@ -499,7 +533,7 @@ class HomePage extends StatelessWidget {
                                         .add(SearchNotes(query));
                                   },
                                   onBurgerTap: () {
-                                    // TODO: M9 - Buka drawer explorer / navigasi
+                                    scaffoldKey.currentState?.openDrawer();
                                   },
                                   onNotificationTap: () {
                                     context.push('/reminders').then((_) {

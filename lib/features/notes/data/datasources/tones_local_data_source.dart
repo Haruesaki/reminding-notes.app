@@ -241,4 +241,32 @@ class TonesLocalDataSource {
     };
     await _atomicWrite(tonesMetaFile, data);
   }
+
+  /// Mendaftarkan ulang semua nada ke sistem MediaStore setelah import (PRD 7.11)
+  Future<void> reRegisterAllTones() async {
+    final tones = await getTones();
+    final updatedTones = <ToneRef>[];
+    for (final tone in tones) {
+      final file = File(p.join(assetsDir.path, tone.relativePath));
+      if (file.existsSync()) {
+        try {
+          final uri = await _mediaStoreService.registerToneToMediaStore(
+            filePath: file.path,
+            title: tone.name,
+          );
+          updatedTones.add(ToneRef(
+            id: tone.id,
+            name: tone.name,
+            relativePath: tone.relativePath,
+            contentUri: uri ?? tone.contentUri,
+          ));
+        } catch (_) {
+          updatedTones.add(tone);
+        }
+      } else {
+        updatedTones.add(tone);
+      }
+    }
+    await _saveTonesMeta(updatedTones);
+  }
 }

@@ -3,6 +3,7 @@ import 'package:get_it/get_it.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../features/backup/data/services/backup_service.dart';
 import '../../features/explorer/data/datasources/local_storage_data_source.dart';
 import '../../features/explorer/data/datasources/notes_index_manager.dart';
 import '../../features/explorer/data/repositories/explorer_repository_impl.dart';
@@ -70,6 +71,7 @@ Future<void> initDependencies({
   sl.registerSingleton<NotificationService>(notificationService);
   sl.registerLazySingleton<AlarmService>(() => AlarmService());
   sl.registerLazySingleton<PermissionService>(() => PermissionService());
+  sl.registerLazySingleton<BackupService>(() => BackupService());
 
   // Repositories
   sl.registerLazySingleton<ExplorerRepository>(
