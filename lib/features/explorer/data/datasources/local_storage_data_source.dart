@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/utils/atomic_file_writer.dart';
 import '../../../../core/utils/display_order_sorter.dart';
 import '../../../../core/utils/name_sanitizer.dart';
 import '../../domain/entities/entities.dart';
@@ -34,43 +36,19 @@ class LocalStorageDataSource {
     return File(p.join(rootDir.path, relativePath));
   }
 
-  /// Format JSON standar: UTF-8 tanpa BOM, indent 2 spasi, diakhiri \n
-  String _encodeJson(Map<String, dynamic> data) {
-    return '${const JsonEncoder.withIndent('  ').convert(data)}\n';
-  }
-
-  /// Atomic write: tulis ke *.tmp lalu rename ke target
+  /// Atomic write: tulis ke *.tmp unik lalu rename langsung ke target (PRD 6.1, 6.7)
   Future<void> _atomicWrite(File targetFile, Map<String, dynamic> jsonMap) async {
-    final parentDir = targetFile.parent;
-    if (!parentDir.existsSync()) {
-      parentDir.createSync(recursive: true);
-    }
-
-    final tmpFile = File('${targetFile.path}.tmp');
-    final content = _encodeJson(jsonMap);
-
-    tmpFile.writeAsStringSync(content, flush: true);
-
-    try {
-      if (targetFile.existsSync()) {
-        targetFile.deleteSync();
-      }
-      tmpFile.renameSync(targetFile.path);
-    } catch (_) {
-      tmpFile.copySync(targetFile.path);
-      if (tmpFile.existsSync()) {
-        tmpFile.deleteSync();
-      }
-    }
+    await AtomicFileWriter.writeJson(targetFile, jsonMap, uuid: _uuid);
   }
 
-  /// Memastikan folder root dan _folder.json root sudah dibuat
+  /// Memastikan folder root dan _folder.json root sudah dibuat, serta pulihkan *.tmp yatim
   Future<void> init() async {
-    if (!rootDir.existsSync()) {
-      rootDir.createSync(recursive: true);
+    if (!await rootDir.exists()) {
+      await rootDir.create(recursive: true);
     }
+    await AtomicFileWriter.recoverOrphanTmpFiles(rootDir);
     final rootMetaFile = File(p.join(rootDir.path, '_folder.json'));
-    if (!rootMetaFile.existsSync()) {
+    if (!await rootMetaFile.exists()) {
       final rootFolder = FolderModel(
         id: 'root',
         relativePath: '',
@@ -236,9 +214,12 @@ class LocalStorageDataSource {
     ));
 
     await _atomicWrite(targetFile, model.toJson());
-    if (oldFileToDelete != null && oldFileToDelete.path != targetFile.path) {
+    if (oldFileToDelete != null &&
+        oldFileToDelete.path.toLowerCase() != targetFile.path.toLowerCase()) {
       if (oldFileToDelete.existsSync()) {
-        oldFileToDelete.deleteSync();
+        try {
+          oldFileToDelete.deleteSync();
+        } catch (_) {}
       }
     }
     await _ensureInOrder(folderRel, model.id);
@@ -305,9 +286,12 @@ class LocalStorageDataSource {
     ));
 
     await _atomicWrite(targetFile, model.toJson());
-    if (oldFileToDelete != null && oldFileToDelete.path != targetFile.path) {
+    if (oldFileToDelete != null &&
+        oldFileToDelete.path.toLowerCase() != targetFile.path.toLowerCase()) {
       if (oldFileToDelete.existsSync()) {
-        oldFileToDelete.deleteSync();
+        try {
+          oldFileToDelete.deleteSync();
+        } catch (_) {}
       }
     }
     await _ensureInOrder(folderRel, model.id);
@@ -390,8 +374,12 @@ class LocalStorageDataSource {
     final newRelPath = parentRel.isEmpty ? targetDirName : p.join(parentRel, targetDirName).replaceAll(r'\', '/');
     final newDir = _resolveDirectory(newRelPath);
 
-    if (oldDir.path != newDir.path) {
+    if (oldDir.path.toLowerCase() != newDir.path.toLowerCase()) {
       await oldDir.rename(newDir.path);
+    } else if (oldDir.path != newDir.path) {
+      final intermediate = Directory('${oldDir.path}_case_${DateTime.now().microsecondsSinceEpoch}');
+      await oldDir.rename(intermediate.path);
+      await intermediate.rename(newDir.path);
     }
 
     final currentMeta = await getFolder(newRelPath);
@@ -420,9 +408,9 @@ class LocalStorageDataSource {
     final parentDir = _resolveDirectory(parentRel);
 
     final existingFileNames = <String>[];
-    if (parentDir.existsSync()) {
-      for (final e in parentDir.listSync(followLinks: false)) {
-        if (e is File && p.basename(e.path) != p.basename(file.path)) {
+    if (await parentDir.exists()) {
+      await for (final e in parentDir.list(followLinks: false)) {
+        if (e is File && p.basename(e.path).toLowerCase() != p.basename(file.path).toLowerCase()) {
           existingFileNames.add(p.basename(e.path));
         }
       }
@@ -438,13 +426,20 @@ class LocalStorageDataSource {
     map['title'] = newTitle;
     map['updatedAt'] = DateTime.now().toUtc().toIso8601String();
 
-    if (file.path != targetFile.path) {
+    if (file.path.toLowerCase() != targetFile.path.toLowerCase()) {
       await _atomicWrite(targetFile, map);
       if (await file.exists()) {
         await file.delete();
       }
     } else {
-      await _atomicWrite(file, map);
+      if (file.path != targetFile.path) {
+        final intermediate = File('${file.path}_case_${DateTime.now().microsecondsSinceEpoch}');
+        try {
+          await file.rename(intermediate.path);
+          await intermediate.rename(targetFile.path);
+        } catch (_) {}
+      }
+      await _atomicWrite(targetFile, map);
     }
 
     final type = map['type'] as String? ?? 'page';
@@ -483,19 +478,21 @@ class LocalStorageDataSource {
   }
 
   /// Memindahkan entri ke folder tujuan
-  Future<void> moveEntry({
+  Future<NodeEntry> moveEntry({
     required NodeEntry entry,
     required String destinationFolderRelativePath,
   }) async {
     final oldParentRel = entry.relativePath.contains('/') ? p.dirname(entry.relativePath) : '';
     if (oldParentRel == destinationFolderRelativePath) {
-      return; // Sudah berada di folder yang sama
+      return entry; // Sudah berada di folder yang sama (PRD 7.8)
     }
 
     final destDir = _resolveDirectory(destinationFolderRelativePath);
     if (!await destDir.exists()) {
       await destDir.create(recursive: true);
     }
+
+    late final NodeEntry finalEntry;
 
     if (entry.isFolder) {
       final normalizedEntry = entry.relativePath.replaceAll(r'\', '/');
@@ -506,16 +503,88 @@ class LocalStorageDataSource {
 
       final oldDir = _resolveDirectory(entry.relativePath);
       final dirName = p.basename(oldDir.path);
-      final newDir = Directory(p.join(destDir.path, dirName));
+
+      // Kumpulkan folder di folder tujuan untuk resolusi benturan nama (case-insensitive)
+      final existingDirNames = <String>[];
+      if (await destDir.exists()) {
+        await for (final e in destDir.list(followLinks: false)) {
+          if (e is Directory) {
+            existingDirNames.add(p.basename(e.path));
+          }
+        }
+      }
+
+      final newDirName = NameSanitizer.resolveCollision(dirName, existingDirNames);
+      final newDir = Directory(p.join(destDir.path, newDirName));
+      final newFolderRel = destinationFolderRelativePath.isEmpty
+          ? newDirName
+          : p.join(destinationFolderRelativePath, newDirName).replaceAll(r'\', '/');
+
       await oldDir.rename(newDir.path);
+
+      final currentMeta = await getFolder(newFolderRel);
+      final updatedMeta = currentMeta.copyWith(
+        name: newDirName,
+        relativePath: newFolderRel,
+      );
+      final metaFile = File(p.join(newDir.path, '_folder.json'));
+      await _atomicWrite(metaFile, FolderModel.fromEntity(updatedMeta).toJson());
+
+      finalEntry = FolderModel.fromEntity(updatedMeta);
     } else {
       final oldFile = _resolveFile(entry.relativePath);
       final fileName = p.basename(oldFile.path);
-      final newFile = File(p.join(destDir.path, fileName));
-      if (await newFile.exists()) {
-        await newFile.delete();
+      final baseTitle = p.basenameWithoutExtension(fileName);
+
+      // Kumpulkan file di folder tujuan untuk resolusi benturan nama (case-insensitive)
+      final existingFileNames = <String>[];
+      if (await destDir.exists()) {
+        await for (final e in destDir.list(followLinks: false)) {
+          if (e is File) {
+            existingFileNames.add(p.basename(e.path));
+          }
+        }
       }
-      await oldFile.rename(newFile.path);
+
+      final newFileName = NameSanitizer.resolveCollision(
+        baseTitle,
+        existingFileNames,
+        extension: '.json',
+      );
+      final newFile = File(p.join(destDir.path, newFileName));
+      final newRelPath = destinationFolderRelativePath.isEmpty
+          ? newFileName
+          : p.join(destinationFolderRelativePath, newFileName).replaceAll(r'\', '/');
+
+      final content = await oldFile.readAsString(encoding: utf8);
+      final map = json.decode(content) as Map<String, dynamic>;
+
+      if (newFileName.toLowerCase() != fileName.toLowerCase()) {
+        map['title'] = p.basenameWithoutExtension(newFileName);
+        map['updatedAt'] = DateTime.now().toUtc().toIso8601String();
+      }
+
+      // Rename langsung tanpa menghapus target file
+      try {
+        await oldFile.rename(newFile.path);
+      } catch (_) {
+        await oldFile.copy(newFile.path);
+        if (await oldFile.exists()) {
+          await oldFile.delete();
+        }
+      }
+
+      // Bila nama/judul berubah, simpan perubahan secara atomik ke file baru
+      if (newFileName.toLowerCase() != fileName.toLowerCase()) {
+        await _atomicWrite(newFile, map);
+      }
+
+      final type = map['type'] as String? ?? 'page';
+      if (type == 'list') {
+        finalEntry = ListFileModel.fromJson(map, relativePath: newRelPath);
+      } else {
+        finalEntry = PageFileModel.fromJson(map, relativePath: newRelPath);
+      }
     }
 
     await _removeFromOrder(oldParentRel, entry.id);
@@ -524,6 +593,8 @@ class LocalStorageDataSource {
     if (indexManager != null) {
       await indexManager!.rebuildIndex(rootDir);
     }
+
+    return finalEntry;
   }
 
   /// Menyalin file ke folder tujuan dengan ID baru

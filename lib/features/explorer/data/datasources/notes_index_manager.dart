@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:equatable/equatable.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../../core/utils/atomic_file_writer.dart';
+
 class IndexFileEntry extends Equatable {
   final String id;
   final String relativePath;
@@ -150,6 +152,7 @@ class NotesIndexManager {
 
   Future<AppIndexData> loadIndex() async {
     final file = indexFile;
+    await AtomicFileWriter.recoverTargetOrphans(file);
     if (!await file.exists()) {
       return const AppIndexData();
     }
@@ -168,25 +171,7 @@ class NotesIndexManager {
   }
 
   Future<void> saveIndex(AppIndexData data) async {
-    if (!await supportDir.exists()) {
-      await supportDir.create(recursive: true);
-    }
-    final file = indexFile;
-    final tmpFile = File('${file.path}.tmp');
-    final jsonStr = '${const JsonEncoder.withIndent('  ').convert(data.toMap())}\n';
-
-    await tmpFile.writeAsString(jsonStr, encoding: utf8, flush: true);
-    try {
-      if (await file.exists()) {
-        await file.delete();
-      }
-      await tmpFile.rename(file.path);
-    } catch (_) {
-      await tmpFile.copy(file.path);
-      if (await tmpFile.exists()) {
-        await tmpFile.delete();
-      }
-    }
+    await AtomicFileWriter.writeJson(indexFile, data.toMap());
   }
 
   /// Membangun ulang indeks dari pohon direktori notes_data secara lengkap

@@ -31,10 +31,14 @@ void main() {
   tearDown(() async {
     await sl.reset();
     if (await tempDir.exists()) {
-      await tempDir.delete(recursive: true);
+      try {
+        await tempDir.delete(recursive: true);
+      } catch (_) {}
     }
     if (await tempSupportDir.exists()) {
-      await tempSupportDir.delete(recursive: true);
+      try {
+        await tempSupportDir.delete(recursive: true);
+      } catch (_) {}
     }
   });
 
@@ -206,12 +210,12 @@ void main() {
       // Enter name and submit
       await tester.enterText(find.byType(TextFormField), 'Kuliah');
       await tester.tap(find.text('Buat'));
-      await tester.pump();
-      await tester.runAsync(() async {
-        await Future.delayed(const Duration(milliseconds: 500));
-      });
-      await tester.pump(const Duration(milliseconds: 350));
-      await tester.pump();
+      for (int i = 0; i < 20; i++) {
+        await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+        await tester.pump(const Duration(milliseconds: 50));
+        if (find.byType(FolderTile).evaluate().isNotEmpty) break;
+      }
+      await tester.pumpAndSettle();
 
       // Dialog closed, folder tile appears
       expect(find.text('Folder Baru'), findsNothing);
@@ -286,15 +290,16 @@ void main() {
         'navigates root -> Level1 -> Level2 -> Level3 with breadcrumbs, no date strip, back arrow',
         (tester) async {
       final repo = sl<ExplorerRepository>();
-
       // Pre-seed 3 nested folders:
       // Root / Level1
       // Root / Level1 / Level2
       // Root / Level1 / Level2 / Level3
-      await repo.createFolder(parentRelativePath: '', name: 'Level1');
-      await repo.createFolder(parentRelativePath: 'Level1', name: 'Level2');
-      await repo.createFolder(
-          parentRelativePath: 'Level1/Level2', name: 'Level3');
+      await tester.runAsync(() async {
+        await repo.createFolder(parentRelativePath: '', name: 'Level1');
+        await repo.createFolder(parentRelativePath: 'Level1', name: 'Level2');
+        await repo.createFolder(
+            parentRelativePath: 'Level1/Level2', name: 'Level3');
+      });
 
       final rootBloc = sl<NoteListBloc>()..add(const LoadNotes());
 

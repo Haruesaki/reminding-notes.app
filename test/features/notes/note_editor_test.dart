@@ -26,10 +26,14 @@ void main() {
   tearDown(() async {
     await sl.reset();
     if (tempDir.existsSync()) {
-      tempDir.deleteSync(recursive: true);
+      try {
+        tempDir.deleteSync(recursive: true);
+      } catch (_) {}
     }
     if (tempSupportDir.existsSync()) {
-      tempSupportDir.deleteSync(recursive: true);
+      try {
+        tempSupportDir.deleteSync(recursive: true);
+      } catch (_) {}
     }
   });
 
@@ -80,16 +84,25 @@ void main() {
     // Exit to trigger save
     final backBtn = find.byKey(const Key('editor_back_button'));
     await tester.tap(backBtn);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 600));
+    for (int i = 0; i < 20; i++) {
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+      await tester.pump(const Duration(milliseconds: 50));
+      final files = tempDir
+          .listSync()
+          .where((e) => e.path.endsWith('.json') && !e.path.contains('_folder.json'))
+          .toList();
+      if (files.isNotEmpty) break;
+    }
 
     // Verify file on disk has isFavorite = true
-    final dataSource = sl<LocalStorageDataSource>();
-    final entries = await dataSource.listFolder('');
-    final files = entries.whereType<PageFile>().toList();
+    final files = tempDir
+        .listSync()
+        .where((e) => e.path.endsWith('.json') && !e.path.contains('_folder.json'))
+        .toList();
     expect(files.length, 1);
-    expect(files.first.title, 'Catatan Penting');
-    expect(files.first.isFavorite, isTrue);
+    final savedData = jsonDecode(File(files.first.path).readAsStringSync(encoding: utf8));
+    expect(savedData['title'], 'Catatan Penting');
+    expect(savedData['favoritedAt'], isNotNull);
   });
 
   testWidgets('format bertahan setelah tutup-buka editor', (tester) async {
@@ -188,8 +201,11 @@ void main() {
     // Exit editor to save
     final backBtn = find.byKey(const Key('editor_back_button'));
     await tester.tap(backBtn);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 600));
+    for (int i = 0; i < 20; i++) {
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+      await tester.pump(const Duration(milliseconds: 50));
+      if (!initialFile.existsSync()) break;
+    }
 
     // Old file should no longer exist
     expect(initialFile.existsSync(), isFalse);

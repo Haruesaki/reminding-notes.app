@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../../explorer/data/models/task_models.dart';
 import '../../../explorer/domain/entities/tone_ref.dart';
+import '../../../../core/utils/atomic_file_writer.dart';
 import '../services/media_store_service.dart';
 
 class ToneFileSizeLimitException implements Exception {
@@ -33,15 +34,16 @@ class TonesLocalDataSource {
   Directory get tonesDir => Directory(p.join(assetsDir.path, 'tones'));
   File get tonesMetaFile => File(p.join(assetsDir.path, 'tones.json'));
 
-  /// Memastikan folder assets dan tones.json tersedia
+  /// Memastikan folder assets dan tones.json tersedia, serta pulihkan *.tmp yatim
   Future<void> init() async {
-    if (!assetsDir.existsSync()) {
-      assetsDir.createSync(recursive: true);
+    if (!await assetsDir.exists()) {
+      await assetsDir.create(recursive: true);
     }
-    if (!tonesDir.existsSync()) {
-      tonesDir.createSync(recursive: true);
+    if (!await tonesDir.exists()) {
+      await tonesDir.create(recursive: true);
     }
-    if (!tonesMetaFile.existsSync()) {
+    await AtomicFileWriter.recoverTargetOrphans(tonesMetaFile);
+    if (!await tonesMetaFile.exists()) {
       final initialData = {
         'schemaVersion': 1,
         'tones': <Map<String, dynamic>>[],
@@ -51,17 +53,7 @@ class TonesLocalDataSource {
   }
 
   Future<void> _atomicWrite(File target, Map<String, dynamic> json) async {
-    final parent = target.parent;
-    if (!parent.existsSync()) {
-      parent.createSync(recursive: true);
-    }
-    final tmp = File('${target.path}.tmp');
-    final content = const JsonEncoder.withIndent('  ').convert(json);
-    await tmp.writeAsString(content, flush: true);
-    if (target.existsSync()) {
-      target.deleteSync();
-    }
-    await tmp.rename(target.path);
+    await AtomicFileWriter.writeJson(target, json, uuid: _uuid);
   }
 
   /// Membaca daftar nada dari tones.json

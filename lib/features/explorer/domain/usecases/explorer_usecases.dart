@@ -176,13 +176,13 @@ class MoveEntryParams {
   });
 }
 
-class MoveEntryUseCase implements UseCase<void, MoveEntryParams> {
+class MoveEntryUseCase implements UseCase<NodeEntry, MoveEntryParams> {
   final ExplorerRepository repository;
 
   MoveEntryUseCase(this.repository);
 
   @override
-  Future<void> call(MoveEntryParams params) {
+  Future<NodeEntry> call(MoveEntryParams params) {
     return repository.moveEntry(
       entry: params.entry,
       destinationFolderRelativePath: params.destinationFolderRelativePath,

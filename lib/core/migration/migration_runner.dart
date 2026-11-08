@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../utils/atomic_file_writer.dart';
+
 class NewerSchemaVersionException implements Exception {
   final int fileVersion;
   final int supportedVersion;
@@ -102,23 +104,7 @@ class MigrationRunner {
 
         if (version < targetVersion) {
           final migrated = migrateJson(decoded);
-          final tmpFile = File('${file.path}.tmp');
-          await tmpFile.writeAsString(
-            '${const JsonEncoder.withIndent('  ').convert(migrated)}\n',
-            encoding: utf8,
-            flush: true,
-          );
-          try {
-            if (await file.exists()) {
-              await file.delete();
-            }
-            await tmpFile.rename(file.path);
-          } catch (_) {
-            await tmpFile.copy(file.path);
-            if (await tmpFile.exists()) {
-              await tmpFile.delete();
-            }
-          }
+          await AtomicFileWriter.writeJson(file, migrated);
         }
       }
 

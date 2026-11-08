@@ -11,7 +11,7 @@ abstract class ExplorerRepository {
   Future<ListFile> saveList(ListFile listFile, {String? targetFolderRelativePath});
   Future<ListFile> getList(String relativePath);
   Future<void> deleteEntry(NodeEntry entry);
-  Future<void> moveEntry({required NodeEntry entry, required String destinationFolderRelativePath});
+  Future<NodeEntry> moveEntry({required NodeEntry entry, required String destinationFolderRelativePath});
   Future<FileEntry> copyFile({required FileEntry file, required String destinationFolderRelativePath});
   Future<FileEntry> toggleFavorite(FileEntry file);
   Future<void> saveOrder({required String folderRelativePath, required List<String> newOrder});

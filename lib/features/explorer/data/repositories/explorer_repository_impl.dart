@@ -73,7 +73,7 @@ class ExplorerRepositoryImpl implements ExplorerRepository {
   }
 
   @override
-  Future<void> moveEntry({
+  Future<NodeEntry> moveEntry({
     required NodeEntry entry,
     required String destinationFolderRelativePath,
   }) {

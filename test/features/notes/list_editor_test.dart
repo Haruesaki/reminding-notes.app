@@ -30,12 +30,16 @@ void main() {
 
   tearDown(() async {
     await sl.reset();
-    if (tempDir.existsSync()) {
-      tempDir.deleteSync(recursive: true);
-    }
-    if (tempSupportDir.existsSync()) {
-      tempSupportDir.deleteSync(recursive: true);
-    }
+    try {
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+      }
+    } catch (_) {}
+    try {
+      if (tempSupportDir.existsSync()) {
+        tempSupportDir.deleteSync(recursive: true);
+      }
+    } catch (_) {}
   });
 
   testWidgets(
@@ -303,8 +307,16 @@ void main() {
     // Tap back untuk keluar dan simpan
     final backBtn = find.byKey(const Key('editor_back_button'));
     await tester.tap(backBtn);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 600));
+    for (int i = 0; i < 20; i++) {
+      await tester.runAsync(() => Future.delayed(const Duration(milliseconds: 50)));
+      await tester.pump(const Duration(milliseconds: 50));
+      final files = tempDir
+          .listSync()
+          .where((e) =>
+              e.path.endsWith('.json') && !e.path.contains('_folder.json'))
+          .toList();
+      if (files.isNotEmpty) break;
+    }
 
     // Periksa file tersimpan di disk
     final files = tempDir
