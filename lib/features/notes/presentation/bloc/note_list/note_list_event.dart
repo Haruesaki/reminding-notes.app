@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import '../../../../explorer/domain/entities/entities.dart';
 import 'note_list_state.dart';
 
 abstract class NoteListEvent extends Equatable {
@@ -83,3 +84,65 @@ class CreateFolderEvent extends NoteListEvent {
   @override
   List<Object?> get props => [name, parentRelativePath];
 }
+
+class ReorderEntriesEvent extends NoteListEvent {
+  final List<String> newOrder;
+  final String folderRelativePath;
+
+  const ReorderEntriesEvent({
+    required this.newOrder,
+    this.folderRelativePath = '',
+  });
+
+  @override
+  List<Object?> get props => [newOrder, folderRelativePath];
+}
+
+class MoveEntryEvent extends NoteListEvent {
+  final NodeEntry entry;
+  final String destinationFolderRelativePath;
+
+  const MoveEntryEvent({
+    required this.entry,
+    required this.destinationFolderRelativePath,
+  });
+
+  @override
+  List<Object?> get props => [entry, destinationFolderRelativePath];
+}
+
+class CopyFileEvent extends NoteListEvent {
+  final FileEntry file;
+  final String destinationFolderRelativePath;
+
+  const CopyFileEvent({
+    required this.file,
+    required this.destinationFolderRelativePath,
+  });
+
+  @override
+  List<Object?> get props => [file, destinationFolderRelativePath];
+}
+
+class RenameFolderEvent extends NoteListEvent {
+  final String folderRelativePath;
+  final String newName;
+
+  const RenameFolderEvent({
+    required this.folderRelativePath,
+    required this.newName,
+  });
+
+  @override
+  List<Object?> get props => [folderRelativePath, newName];
+}
+
+class DeleteFolderEvent extends NoteListEvent {
+  final Folder folder;
+
+  const DeleteFolderEvent(this.folder);
+
+  @override
+  List<Object?> get props => [folder];
+}
+

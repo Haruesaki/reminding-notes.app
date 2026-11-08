@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
@@ -19,6 +20,7 @@ class NotesSearchBar extends StatefulWidget {
 
 class _NotesSearchBarState extends State<NotesSearchBar> {
   late final TextEditingController _controller;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -37,8 +39,17 @@ class _NotesSearchBarState extends State<NotesSearchBar> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onChanged(String query) {
+    _debounceTimer?.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      widget.onQueryChanged(query);
+    });
+    setState(() {});
   }
 
   @override
@@ -70,12 +81,13 @@ class _NotesSearchBarState extends State<NotesSearchBar> {
                 isDense: true,
                 contentPadding: EdgeInsets.symmetric(vertical: 10),
               ),
-              onChanged: widget.onQueryChanged,
+              onChanged: _onChanged,
             ),
           ),
           if (_controller.text.isNotEmpty)
             GestureDetector(
               onTap: () {
+                _debounceTimer?.cancel();
                 _controller.clear();
                 widget.onQueryChanged('');
                 setState(() {});

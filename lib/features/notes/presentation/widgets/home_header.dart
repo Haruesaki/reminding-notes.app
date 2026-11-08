@@ -13,6 +13,8 @@ class HomeHeader extends StatelessWidget {
   final bool showBackButton;
   final VoidCallback? onBackTap;
   final bool hasUrgentDeadline;
+  final bool isCopyMoveMode;
+  final VoidCallback? onPasteTap;
 
   const HomeHeader({
     super.key,
@@ -23,6 +25,8 @@ class HomeHeader extends StatelessWidget {
     this.showBackButton = false,
     this.onBackTap,
     this.hasUrgentDeadline = false,
+    this.isCopyMoveMode = false,
+    this.onPasteTap,
   });
 
   @override
@@ -55,11 +59,43 @@ class HomeHeader extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 10),
-          // 2. Search bar
+          // 2. Search bar with animated shrink and paste icon
           Expanded(
-            child: NotesSearchBar(
-              initialQuery: searchQuery,
-              onQueryChanged: onQueryChanged,
+            child: Row(
+              children: [
+                Expanded(
+                  child: NotesSearchBar(
+                    initialQuery: searchQuery,
+                    onQueryChanged: onQueryChanged,
+                  ),
+                ),
+                AnimatedSize(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeInOutCubic,
+                  child: isCopyMoveMode
+                      ? Padding(
+                          padding: const EdgeInsets.only(left: 8),
+                          child: GestureDetector(
+                            key: const Key('pasteActionButton'),
+                            onTap: onPasteTap,
+                            child: Container(
+                              width: AppConstants.searchBarHeight,
+                              height: AppConstants.searchBarHeight,
+                              decoration: BoxDecoration(
+                                color: AppColors.fabBackground,
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Icon(
+                                Icons.content_paste_go_rounded,
+                                size: 20,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 10),

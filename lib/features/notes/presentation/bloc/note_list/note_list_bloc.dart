@@ -15,6 +15,11 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     on<DeleteNoteEvent>(_onDeleteNote);
     on<TogglePinEvent>(_onTogglePin);
     on<CreateFolderEvent>(_onCreateFolder);
+    on<ReorderEntriesEvent>(_onReorderEntries);
+    on<MoveEntryEvent>(_onMoveEntry);
+    on<CopyFileEvent>(_onCopyFile);
+    on<RenameFolderEvent>(_onRenameFolder);
+    on<DeleteFolderEvent>(_onDeleteFolder);
   }
 
   Future<({List<Folder> folders, List<FileEntry> files})> _fetchFilteredContent({
@@ -163,20 +168,34 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
     }
 
     try {
-      final result = await _fetchFilteredContent(
-        folderRelativePath: folderRel,
-        selectedDate: date,
-        query: event.query.isNotEmpty ? event.query : null,
-        filter: filter,
-      );
-      emit(NoteListLoaded(
-        folderRelativePath: folderRel,
-        folders: result.folders,
-        files: result.files,
-        selectedDate: date,
-        searchQuery: event.query,
-        currentFilter: filter,
-      ));
+      if (event.query.trim().isEmpty) {
+        final result = await _fetchFilteredContent(
+          folderRelativePath: folderRel,
+          selectedDate: date,
+          query: null,
+          filter: filter,
+        );
+        emit(NoteListLoaded(
+          folderRelativePath: folderRel,
+          folders: result.folders,
+          files: result.files,
+          selectedDate: date,
+          searchQuery: '',
+          currentFilter: filter,
+          searchResults: null,
+        ));
+      } else {
+        final searchResults = await repository.searchGlobal(event.query);
+        emit(NoteListLoaded(
+          folderRelativePath: folderRel,
+          folders: const [],
+          files: searchResults.map((r) => r.file).toList(),
+          selectedDate: date,
+          searchQuery: event.query,
+          currentFilter: filter,
+          searchResults: searchResults,
+        ));
+      }
     } catch (e) {
       emit(NoteListError(e.toString()));
     }
@@ -317,6 +336,203 @@ class NoteListBloc extends Bloc<NoteListEvent, NoteListState> {
       final folderRel = currentState is NoteListLoaded
           ? currentState.folderRelativePath
           : event.parentRelativePath;
+      DateTime? date;
+      String query = '';
+      HomeFilter filter = HomeFilter.semua;
+
+      if (currentState is NoteListLoaded) {
+        date = currentState.selectedDate;
+        query = currentState.searchQuery;
+        filter = currentState.currentFilter;
+      }
+
+      final result = await _fetchFilteredContent(
+        folderRelativePath: folderRel,
+        selectedDate: date,
+        query: query.isNotEmpty ? query : null,
+        filter: filter,
+      );
+      emit(NoteListLoaded(
+        folderRelativePath: folderRel,
+        folders: result.folders,
+        files: result.files,
+        selectedDate: date,
+        searchQuery: query,
+        currentFilter: filter,
+      ));
+    } catch (e) {
+      emit(NoteListError(e.toString()));
+    }
+  }
+
+  Future<void> _onReorderEntries(
+    ReorderEntriesEvent event,
+    Emitter<NoteListState> emit,
+  ) async {
+    try {
+      await repository.saveOrder(
+        folderRelativePath: event.folderRelativePath,
+        newOrder: event.newOrder,
+      );
+      final currentState = state;
+      final folderRel = event.folderRelativePath;
+      DateTime? date;
+      String query = '';
+      HomeFilter filter = HomeFilter.semua;
+
+      if (currentState is NoteListLoaded) {
+        date = currentState.selectedDate;
+        query = currentState.searchQuery;
+        filter = currentState.currentFilter;
+      }
+
+      final result = await _fetchFilteredContent(
+        folderRelativePath: folderRel,
+        selectedDate: date,
+        query: query.isNotEmpty ? query : null,
+        filter: filter,
+      );
+      emit(NoteListLoaded(
+        folderRelativePath: folderRel,
+        folders: result.folders,
+        files: result.files,
+        selectedDate: date,
+        searchQuery: query,
+        currentFilter: filter,
+      ));
+    } catch (e) {
+      emit(NoteListError(e.toString()));
+    }
+  }
+
+  Future<void> _onMoveEntry(
+    MoveEntryEvent event,
+    Emitter<NoteListState> emit,
+  ) async {
+    try {
+      await repository.moveEntry(
+        entry: event.entry,
+        destinationFolderRelativePath: event.destinationFolderRelativePath,
+      );
+      final currentState = state;
+      final folderRel = currentState is NoteListLoaded ? currentState.folderRelativePath : '';
+      DateTime? date;
+      String query = '';
+      HomeFilter filter = HomeFilter.semua;
+
+      if (currentState is NoteListLoaded) {
+        date = currentState.selectedDate;
+        query = currentState.searchQuery;
+        filter = currentState.currentFilter;
+      }
+
+      final result = await _fetchFilteredContent(
+        folderRelativePath: folderRel,
+        selectedDate: date,
+        query: query.isNotEmpty ? query : null,
+        filter: filter,
+      );
+      emit(NoteListLoaded(
+        folderRelativePath: folderRel,
+        folders: result.folders,
+        files: result.files,
+        selectedDate: date,
+        searchQuery: query,
+        currentFilter: filter,
+      ));
+    } catch (e) {
+      emit(NoteListError(e.toString()));
+    }
+  }
+
+  Future<void> _onCopyFile(
+    CopyFileEvent event,
+    Emitter<NoteListState> emit,
+  ) async {
+    try {
+      await repository.copyFile(
+        file: event.file,
+        destinationFolderRelativePath: event.destinationFolderRelativePath,
+      );
+      final currentState = state;
+      final folderRel = currentState is NoteListLoaded ? currentState.folderRelativePath : '';
+      DateTime? date;
+      String query = '';
+      HomeFilter filter = HomeFilter.semua;
+
+      if (currentState is NoteListLoaded) {
+        date = currentState.selectedDate;
+        query = currentState.searchQuery;
+        filter = currentState.currentFilter;
+      }
+
+      final result = await _fetchFilteredContent(
+        folderRelativePath: folderRel,
+        selectedDate: date,
+        query: query.isNotEmpty ? query : null,
+        filter: filter,
+      );
+      emit(NoteListLoaded(
+        folderRelativePath: folderRel,
+        folders: result.folders,
+        files: result.files,
+        selectedDate: date,
+        searchQuery: query,
+        currentFilter: filter,
+      ));
+    } catch (e) {
+      emit(NoteListError(e.toString()));
+    }
+  }
+
+  Future<void> _onRenameFolder(
+    RenameFolderEvent event,
+    Emitter<NoteListState> emit,
+  ) async {
+    try {
+      await repository.renameFolder(
+        folderRelativePath: event.folderRelativePath,
+        newName: event.newName,
+      );
+      final currentState = state;
+      final folderRel = currentState is NoteListLoaded ? currentState.folderRelativePath : '';
+      DateTime? date;
+      String query = '';
+      HomeFilter filter = HomeFilter.semua;
+
+      if (currentState is NoteListLoaded) {
+        date = currentState.selectedDate;
+        query = currentState.searchQuery;
+        filter = currentState.currentFilter;
+      }
+
+      final result = await _fetchFilteredContent(
+        folderRelativePath: folderRel,
+        selectedDate: date,
+        query: query.isNotEmpty ? query : null,
+        filter: filter,
+      );
+      emit(NoteListLoaded(
+        folderRelativePath: folderRel,
+        folders: result.folders,
+        files: result.files,
+        selectedDate: date,
+        searchQuery: query,
+        currentFilter: filter,
+      ));
+    } catch (e) {
+      emit(NoteListError(e.toString()));
+    }
+  }
+
+  Future<void> _onDeleteFolder(
+    DeleteFolderEvent event,
+    Emitter<NoteListState> emit,
+  ) async {
+    try {
+      await repository.deleteEntry(event.folder);
+      final currentState = state;
+      final folderRel = currentState is NoteListLoaded ? currentState.folderRelativePath : '';
       DateTime? date;
       String query = '';
       HomeFilter filter = HomeFilter.semua;

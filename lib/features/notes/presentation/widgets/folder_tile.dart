@@ -9,18 +9,25 @@ import '../../../explorer/domain/entities/folder.dart';
 class FolderTile extends StatelessWidget {
   final Folder folder;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+  final bool isPendingOperation;
 
   const FolderTile({
     super.key,
     required this.folder,
     this.onTap,
+    this.onLongPress,
+    this.isPendingOperation = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
+    return Opacity(
+      opacity: isPendingOperation ? 0.5 : 1.0,
+      child: GestureDetector(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: Container(
         height: AppConstants.folderTileHeight,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
@@ -60,6 +67,7 @@ class FolderTile extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 }

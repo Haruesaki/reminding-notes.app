@@ -30,6 +30,7 @@ class NoteListLoaded extends NoteListState {
   final DateTime? selectedDate;
   final String searchQuery;
   final HomeFilter currentFilter;
+  final List<SearchResultItem>? searchResults;
 
   const NoteListLoaded({
     this.folderRelativePath = '',
@@ -38,10 +39,13 @@ class NoteListLoaded extends NoteListState {
     this.selectedDate,
     this.searchQuery = '',
     this.currentFilter = HomeFilter.semua,
+    this.searchResults,
   });
 
   /// Backward compatibility getter for tests
   List<FileEntry> get notes => files;
+
+  bool get isSearching => searchQuery.trim().isNotEmpty;
 
   NoteListLoaded copyWith({
     String? folderRelativePath,
@@ -50,6 +54,7 @@ class NoteListLoaded extends NoteListState {
     DateTime? Function()? selectedDate,
     String? searchQuery,
     HomeFilter? currentFilter,
+    List<SearchResultItem>? Function()? searchResults,
   }) {
     return NoteListLoaded(
       folderRelativePath: folderRelativePath ?? this.folderRelativePath,
@@ -58,12 +63,13 @@ class NoteListLoaded extends NoteListState {
       selectedDate: selectedDate != null ? selectedDate() : this.selectedDate,
       searchQuery: searchQuery ?? this.searchQuery,
       currentFilter: currentFilter ?? this.currentFilter,
+      searchResults: searchResults != null ? searchResults() : this.searchResults,
     );
   }
 
   @override
   List<Object?> get props =>
-      [folderRelativePath, folders, files, selectedDate, searchQuery, currentFilter];
+      [folderRelativePath, folders, files, selectedDate, searchQuery, currentFilter, searchResults];
 }
 
 class NoteListError extends NoteListState {

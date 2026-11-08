@@ -17,6 +17,7 @@ import '../../features/notes/presentation/bloc/list_editor/list_editor_bloc.dart
 import '../../features/notes/presentation/bloc/note_editor/note_editor_bloc.dart';
 import '../../features/notes/presentation/bloc/note_list/note_list_bloc.dart';
 import '../../features/notes/presentation/bloc/tones/tones_bloc.dart';
+import '../../features/notes/presentation/cubit/copy_move_cubit.dart';
 import '../../features/notes/presentation/cubit/deadline_calendar_cubit.dart';
 
 final sl = GetIt.instance;
@@ -105,6 +106,9 @@ Future<void> initDependencies({
   );
   sl.registerFactory<DeadlineCalendarCubit>(
     () => DeadlineCalendarCubit(repository: sl<ExplorerRepository>()),
+  );
+  sl.registerLazySingleton<CopyMoveCubit>(
+    () => CopyMoveCubit(),
   );
 }
 

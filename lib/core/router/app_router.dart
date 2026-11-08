@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../di/injection_container.dart';
 import '../../features/notes/presentation/bloc/note_list/note_list_bloc.dart';
 import '../../features/notes/presentation/bloc/note_list/note_list_event.dart';
+import '../../features/notes/presentation/cubit/copy_move_cubit.dart';
 import '../../features/notes/presentation/cubit/deadline_calendar_cubit.dart';
 import '../../features/notes/presentation/pages/editor_placeholder_page.dart';
 import '../../features/notes/presentation/pages/home_page.dart';
@@ -27,6 +28,9 @@ class AppRouter {
               create: (_) =>
                   sl<DeadlineCalendarCubit>()..loadDeadlines(),
             ),
+            BlocProvider.value(
+              value: sl<CopyMoveCubit>(),
+            ),
           ],
           child: const HomePage(),
         ),
@@ -45,6 +49,9 @@ class AppRouter {
               BlocProvider(
                 create: (_) =>
                     sl<DeadlineCalendarCubit>()..loadDeadlines(),
+              ),
+              BlocProvider.value(
+                value: sl<CopyMoveCubit>(),
               ),
             ],
             child: HomePage(folderRelativePath: folderPath),

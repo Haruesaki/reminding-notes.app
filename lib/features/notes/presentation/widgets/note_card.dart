@@ -11,6 +11,9 @@ class NoteCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onTogglePin;
   final VoidCallback? onDelete;
+  final VoidCallback? onLongPress;
+  final String? breadcrumb;
+  final bool isPendingOperation;
 
   const NoteCard({
     super.key,
@@ -19,6 +22,9 @@ class NoteCard extends StatelessWidget {
     required this.onTap,
     this.onTogglePin,
     this.onDelete,
+    this.onLongPress,
+    this.breadcrumb,
+    this.isPendingOperation = false,
   });
 
   @override
@@ -95,21 +101,37 @@ class NoteCard extends StatelessWidget {
         child: const Icon(Icons.delete_outline, color: Colors.white, size: 26),
       ),
       onDismissed: (_) => onDelete?.call(),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(AppConstants.cardRadius),
-          ),
-          padding: const EdgeInsets.all(AppConstants.cardPadding),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+      child: Opacity(
+        opacity: isPendingOperation ? 0.5 : 1.0,
+        child: GestureDetector(
+          onTap: onTap,
+          onLongPress: onLongPress,
+          child: Container(
+            decoration: BoxDecoration(
+              color: bgColor,
+              borderRadius: BorderRadius.circular(AppConstants.cardRadius),
+            ),
+            padding: const EdgeInsets.all(AppConstants.cardPadding),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (breadcrumb != null) ...[
+                  Text(
+                    breadcrumb!,
+                    style: AppTypography.caption.copyWith(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 4),
+                ],
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   Expanded(
                     child: Text(
                       note.title.isNotEmpty ? note.title : 'Untitled',
@@ -149,6 +171,7 @@ class NoteCard extends StatelessWidget {
             ],
           ),
         ),
+      ),
       ),
     );
   }

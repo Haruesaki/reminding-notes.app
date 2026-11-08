@@ -133,4 +133,9 @@ class ExplorerRepositoryImpl implements ExplorerRepository {
       );
     }).toList();
   }
+
+  @override
+  Future<List<SearchResultItem>> searchGlobal(String query) {
+    return localDataSource.searchGlobal(query);
+  }
 }

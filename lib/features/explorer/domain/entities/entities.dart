@@ -5,5 +5,6 @@ export 'folder.dart';
 export 'list_file.dart';
 export 'node_entry.dart';
 export 'page_file.dart';
+export 'search_result_item.dart';
 export 'task.dart';
 export 'tone_ref.dart';

@@ -20,29 +20,34 @@ class DisplayOrderSorter {
       items: folders,
       order: order,
       getId: (f) => f.id,
-      getCreatedAt: (f) => f.createdAt,
+      compareFallback: (a, b) => a.createdAt.compareTo(b.createdAt),
     );
 
-    // Urutkan favorite files: favoritedAt terbaru di atas (descending)
-    favoriteFiles.sort((a, b) {
-      final aFav = a.favoritedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final bFav = b.favoritedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-      final cmp = bFav.compareTo(aFav);
-      if (cmp != 0) return cmp;
-      return b.createdAt.compareTo(a.createdAt);
-    });
+    // Urutkan favorite files: ikuti order jika ada, fallback ke favoritedAt terbaru di atas
+    final sortedFavoriteFiles = _sortByOrder(
+      items: favoriteFiles,
+      order: order,
+      getId: (f) => f.id,
+      compareFallback: (a, b) {
+        final aFav = a.favoritedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bFav = b.favoritedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final cmp = bFav.compareTo(aFav);
+        if (cmp != 0) return cmp;
+        return a.createdAt.compareTo(b.createdAt);
+      },
+    );
 
     // Urutkan other files berdasarkan order list
     final sortedOtherFiles = _sortByOrder(
       items: otherFiles,
       order: order,
       getId: (f) => f.id,
-      getCreatedAt: (f) => f.createdAt,
+      compareFallback: (a, b) => a.createdAt.compareTo(b.createdAt),
     );
 
     return [
       ...sortedFolders,
-      ...favoriteFiles,
+      ...sortedFavoriteFiles,
       ...sortedOtherFiles,
     ];
   }
@@ -51,7 +56,7 @@ class DisplayOrderSorter {
     required List<T> items,
     required List<String> order,
     required String Function(T item) getId,
-    required DateTime Function(T item) getCreatedAt,
+    required int Function(T a, T b) compareFallback,
   }) {
     final orderMap = <String, int>{};
     for (int i = 0; i < order.length; i++) {
@@ -70,7 +75,7 @@ class DisplayOrderSorter {
     }
 
     inOrder.sort((a, b) => orderMap[getId(a)]!.compareTo(orderMap[getId(b)]!));
-    notInOrder.sort((a, b) => getCreatedAt(a).compareTo(getCreatedAt(b)));
+    notInOrder.sort(compareFallback);
 
     return [...inOrder, ...notInOrder];
   }

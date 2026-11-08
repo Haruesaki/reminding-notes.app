@@ -498,6 +498,12 @@ class LocalStorageDataSource {
     }
 
     if (entry.isFolder) {
+      final normalizedEntry = entry.relativePath.replaceAll(r'\', '/');
+      final normalizedDest = destinationFolderRelativePath.replaceAll(r'\', '/');
+      if (normalizedDest == normalizedEntry || normalizedDest.startsWith('$normalizedEntry/')) {
+        throw ArgumentError('Dilarang memindahkan folder ke dalam dirinya sendiri atau turunannya');
+      }
+
       final oldDir = _resolveDirectory(entry.relativePath);
       final dirName = p.basename(oldDir.path);
       final newDir = Directory(p.join(destDir.path, dirName));
@@ -552,6 +558,7 @@ class LocalStorageDataSource {
         relativePath: newRelPath,
         createdAt: now,
         updatedAt: now,
+        clearFavoritedAt: true,
       );
       final targetFile = _resolveFile(newRelPath);
       await _atomicWrite(targetFile, PageFileModel.fromEntity(copy).toJson());
@@ -559,12 +566,21 @@ class LocalStorageDataSource {
       if (indexManager != null) await indexManager!.rebuildIndex(rootDir);
       return copy;
     } else if (file is ListFile) {
+      final newTasks = file.tasks.map((task) {
+        return task.copyWith(
+          id: _uuid.v4(),
+          subtasks: task.subtasks.map((sub) => sub.copyWith(id: _uuid.v4())).toList(),
+        );
+      }).toList();
+
       final copy = file.copyWith(
         id: newId,
         title: newTitle,
         relativePath: newRelPath,
         createdAt: now,
         updatedAt: now,
+        clearFavoritedAt: true,
+        tasks: newTasks,
       );
       final targetFile = _resolveFile(newRelPath);
       await _atomicWrite(targetFile, ListFileModel.fromEntity(copy).toJson());
@@ -626,6 +642,51 @@ class LocalStorageDataSource {
     final updated = folder.copyWith(order: newOrder);
     final metaFile = File(p.join(_resolveDirectory(folderRelativePath).path, '_folder.json'));
     await _atomicWrite(metaFile, FolderModel.fromEntity(updated).toJson());
+  }
+
+  /// Membaca file baik PageFile maupun ListFile berdasarkan relativePath
+  Future<FileEntry> readFile(String relativePath) async {
+    final file = _resolveFile(relativePath);
+    if (!await file.exists()) {
+      throw FileSystemException('File not found', file.path);
+    }
+    final content = await file.readAsString(encoding: utf8);
+    final map = jsonDecode(content) as Map<String, dynamic>;
+    final type = map['type'] as String? ?? 'page';
+    if (type == 'list') {
+      return ListFileModel.fromJson(map, relativePath: relativePath);
+    } else {
+      return PageFileModel.fromJson(map, relativePath: relativePath);
+    }
+  }
+
+  /// Pencarian global berdasarkan judul + plainText (PRD 7.10)
+  Future<List<SearchResultItem>> searchGlobal(String query) async {
+    final q = query.trim().toLowerCase();
+    if (q.isEmpty) return const [];
+
+    final index = await (indexManager?.loadIndex() ?? Future.value(null));
+    if (index == null) return const [];
+
+    final matched = index.files.where((f) {
+      return f.title.toLowerCase().contains(q) ||
+          f.plainText.toLowerCase().contains(q);
+    }).toList();
+
+    final results = <SearchResultItem>[];
+    for (final m in matched) {
+      try {
+        final file = await readFile(m.relativePath);
+        final dir = p.dirname(m.relativePath).replaceAll(r'\', '/');
+        final breadcrumb = (dir == '.' || dir.isEmpty)
+            ? 'Beranda'
+            : dir.replaceAll('/', ' / ');
+        results.add(SearchResultItem(file: file, breadcrumb: breadcrumb));
+      } catch (_) {
+        // Lewati jika file tidak dapat dibaca
+      }
+    }
+    return results;
   }
 
   // --- Helper privat untuk manajemen order ---
