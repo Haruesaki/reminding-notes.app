@@ -464,6 +464,7 @@ class HomePage extends StatelessWidget {
         children: [
           SafeArea(
             child: BlocBuilder<NoteListBloc, NoteListState>(
+              buildWhen: (previous, current) => previous != current,
               builder: (context, state) {
                 DateTime? selectedDate;
                 String searchQuery = '';
@@ -629,6 +630,7 @@ class HomePage extends StatelessWidget {
                                     _buildFoldersGrid(
                                       context,
                                       folders,
+                                      columnCount,
                                       pendingEntryId,
                                     ),
                                     const SizedBox(height: 16),
@@ -724,14 +726,15 @@ class HomePage extends StatelessWidget {
   Widget _buildFoldersGrid(
     BuildContext context,
     List<Folder> folders,
+    int columnCount,
     String? pendingEntryId,
   ) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: folders.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: columnCount,
         crossAxisSpacing: 10,
         mainAxisSpacing: 10,
         mainAxisExtent: AppConstants.folderTileHeight,
@@ -846,6 +849,7 @@ class HomePage extends StatelessWidget {
                       }
                     },
                     child: NoteCard(
+                      key: ValueKey('note_card_${item.file.id}_${item.file.updatedAt.millisecondsSinceEpoch}'),
                       note: item.file,
                       index: item.index,
                       isPendingOperation: item.file.id == pendingEntryId,
@@ -927,6 +931,7 @@ class HomePage extends StatelessWidget {
               children: [
                 for (final row in columns[colIdx]) ...[
                   NoteCard(
+                    key: ValueKey('search_card_${row.item.file.id}_${row.item.file.updatedAt.millisecondsSinceEpoch}'),
                     note: row.item.file,
                     index: row.index,
                     breadcrumb: row.item.breadcrumb,

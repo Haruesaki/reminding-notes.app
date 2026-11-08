@@ -72,6 +72,8 @@ Future<void> initDependencies({
   sl.registerLazySingleton<AlarmService>(() => AlarmService());
   sl.registerLazySingleton<PermissionService>(() => PermissionService());
   sl.registerLazySingleton<BackupService>(() => BackupService());
+  sl.registerSingleton<Directory>(notesDir, instanceName: 'notesDir');
+  sl.registerSingleton<Directory>(assetsDir, instanceName: 'assetsDir');
 
   // Repositories
   sl.registerLazySingleton<ExplorerRepository>(

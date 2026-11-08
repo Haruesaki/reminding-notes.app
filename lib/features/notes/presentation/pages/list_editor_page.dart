@@ -355,18 +355,22 @@ class _ListEditorViewState extends State<_ListEditorView>
                 children: [
                   // Main Scrollable Area
                   Positioned.fill(
-                    child: SingleChildScrollView(
-                      controller: _scrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(
-                        AppConstants.screenMargin,
-                        68,
-                        AppConstants.screenMargin,
-                        100,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720),
+                        child: SingleChildScrollView(
+                          controller: _scrollController,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(
+                            AppConstants.screenMargin,
+                            68,
+                            AppConstants.screenMargin,
+                            100,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                           // Title (Large, Bold, Multi-line)
                           TextField(
                             key: const Key('list_title_input'),
@@ -451,20 +455,25 @@ class _ListEditorViewState extends State<_ListEditorView>
                       ),
                     ),
                   ),
+                ),
+              ),
 
-                  // Pinned Header & Gradient Scroll Fade
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Header
-                        Container(
-                          height: 56,
-                          color: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
+              // Pinned Header & Gradient Scroll Fade
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    Container(
+                      height: 56,
+                      color: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 720),
                           child: Row(
                             children: [
                               IconButton(
@@ -529,6 +538,8 @@ class _ListEditorViewState extends State<_ListEditorView>
                             ],
                           ),
                         ),
+                      ),
+                    ),
 
                         // Gradient Scroll Fade (no BackdropFilter)
                         Container(

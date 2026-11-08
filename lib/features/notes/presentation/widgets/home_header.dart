@@ -85,10 +85,19 @@ class HomeHeader extends StatelessWidget {
                                 color: AppColors.fabBackground,
                                 borderRadius: BorderRadius.circular(14),
                               ),
-                              child: const Icon(
-                                Icons.content_paste_go_rounded,
-                                size: 20,
-                                color: Colors.white,
+                              child: AnimatedScale(
+                                scale: isCopyMoveMode ? 1.0 : 0.5,
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeOutBack,
+                                child: AnimatedOpacity(
+                                  opacity: isCopyMoveMode ? 1.0 : 0.0,
+                                  duration: const Duration(milliseconds: 200),
+                                  child: const Icon(
+                                    Icons.content_paste_go_rounded,
+                                    size: 20,
+                                    color: Colors.white,
+                                  ),
+                                ),
                               ),
                             ),
                           ),

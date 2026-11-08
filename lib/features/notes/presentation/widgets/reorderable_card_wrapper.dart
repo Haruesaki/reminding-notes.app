@@ -42,8 +42,8 @@ class _ReorderableCardWrapperState<T extends NodeEntry>
       builder: (context, candidateData, rejectedData) {
         final isHovered = candidateData.isNotEmpty;
         return AnimatedScale(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOutCubic,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOutBack,
           scale: isHovered ? 1.03 : 1.0,
           child: LongPressDraggable<T>(
             data: widget.item,
@@ -77,14 +77,14 @@ class _ReorderableCardWrapperState<T extends NodeEntry>
             },
             feedback: Material(
               color: Colors.transparent,
-              elevation: 4,
+              elevation: 6,
               borderRadius: BorderRadius.circular(16),
               child: SizedBox(
                 width: MediaQuery.of(context).size.width * 0.44,
                 child: Opacity(
-                  opacity: 0.9,
+                  opacity: 0.95,
                   child: Transform.scale(
-                    scale: 1.02,
+                    scale: 1.03,
                     child: widget.child,
                   ),
                 ),

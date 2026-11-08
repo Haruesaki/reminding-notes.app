@@ -282,64 +282,70 @@ class _NoteEditorViewState extends State<_NoteEditorView>
                 children: [
                   // Main Scrollable Area
                   Positioned.fill(
-                    child: SingleChildScrollView(
-                      controller: _scrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.fromLTRB(
-                        AppConstants.screenMargin,
-                        68,
-                        AppConstants.screenMargin,
-                        100,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Title (Large, Bold, Multi-line)
-                          TextField(
-                            key: const Key('note_title_input'),
-                            controller: _titleController,
-                            maxLines: null,
-                            keyboardType: TextInputType.multiline,
-                            textInputAction: TextInputAction.next,
-                            style: const TextStyle(
-                              fontSize: 34,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF111111),
-                              height: 1.15,
-                            ),
-                            decoration: const InputDecoration(
-                              hintText: 'Tanpa judul',
-                              hintStyle: TextStyle(
-                                fontSize: 34,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF8A8A8A),
-                                height: 1.15,
+                    child: Align(
+                      alignment: Alignment.topCenter,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720),
+                        child: SingleChildScrollView(
+                          controller: _scrollController,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(
+                            AppConstants.screenMargin,
+                            68,
+                            AppConstants.screenMargin,
+                            100,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Title (Large, Bold, Multi-line)
+                              TextField(
+                                key: const Key('note_title_input'),
+                                controller: _titleController,
+                                maxLines: null,
+                                keyboardType: TextInputType.multiline,
+                                textInputAction: TextInputAction.next,
+                                style: const TextStyle(
+                                  fontSize: 34,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF111111),
+                                  height: 1.15,
+                                ),
+                                decoration: const InputDecoration(
+                                  hintText: 'Tanpa judul',
+                                  hintStyle: TextStyle(
+                                    fontSize: 34,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF8A8A8A),
+                                    height: 1.15,
+                                  ),
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.zero,
+                                ),
                               ),
-                              border: InputBorder.none,
-                              contentPadding: EdgeInsets.zero,
-                            ),
-                          ),
-                          const SizedBox(height: 16),
+                              const SizedBox(height: 16),
 
-                          // Rich Text Quill Editor
-                          QuillEditor.basic(
-                            controller: _quillController,
-                            focusNode: _editorFocusNode,
-                            config: const QuillEditorConfig(
-                              scrollable: false,
-                              autoFocus: false,
-                              expands: false,
-                              placeholder: 'Mulai mengetik...',
-                            ),
-                          ),
+                              // Rich Text Quill Editor
+                              QuillEditor.basic(
+                                controller: _quillController,
+                                focusNode: _editorFocusNode,
+                                config: const QuillEditorConfig(
+                                  scrollable: false,
+                                  autoFocus: false,
+                                  expands: false,
+                                  placeholder: 'Mulai mengetik...',
+                                ),
+                              ),
 
-                          // Bottom tap target for focusing editor
-                          GestureDetector(
-                            behavior: HitTestBehavior.translucent,
-                            onTap: () => _editorFocusNode.requestFocus(),
-                            child: const SizedBox(height: 200),
+                              // Bottom tap target for focusing editor
+                              GestureDetector(
+                                behavior: HitTestBehavior.translucent,
+                                onTap: () => _editorFocusNode.requestFocus(),
+                                child: const SizedBox(height: 200),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
@@ -357,8 +363,11 @@ class _NoteEditorViewState extends State<_NoteEditorView>
                           height: 56,
                           color: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Row(
-                            children: [
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 720),
+                              child: Row(
+                                children: [
                               IconButton(
                                 key: const Key('editor_back_button'),
                                 icon: const Icon(
@@ -421,8 +430,10 @@ class _NoteEditorViewState extends State<_NoteEditorView>
                             ],
                           ),
                         ),
+                      ),
+                    ),
 
-                        // Gradient fade below header (without BackdropFilter)
+                    // Gradient fade below header (without BackdropFilter)
                         IgnorePointer(
                           child: Container(
                             height: 16,

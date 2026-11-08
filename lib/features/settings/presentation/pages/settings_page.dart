@@ -461,40 +461,51 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                       ),
                     ),
-                    if (_isBackupExpanded) ...[
-                      const Divider(height: 1, thickness: 1, color: AppColors.borderLight),
-                      Material(
-                        color: Colors.transparent,
-                        child: ListTile(
-                          leading: const Icon(
-                            Icons.upload_file_outlined,
-                            color: AppColors.textPrimary,
-                          ),
-                          title: const Text('Export', style: AppTypography.body),
-                          subtitle: const Text(
-                            'Simpan semua data catatan dan nada ke file ZIP',
-                            style: AppTypography.caption,
-                          ),
-                          onTap: _isLoading ? null : _handleExport,
-                        ),
+                    ClipRect(
+                      child: AnimatedSize(
+                        duration: const Duration(milliseconds: 220),
+                        curve: Curves.easeInOut,
+                        child: _isBackupExpanded
+                            ? Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Divider(height: 1, thickness: 1, color: AppColors.borderLight),
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: ListTile(
+                                      leading: const Icon(
+                                        Icons.upload_file_outlined,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                      title: const Text('Export', style: AppTypography.body),
+                                      subtitle: const Text(
+                                        'Simpan semua data catatan dan nada ke file ZIP',
+                                        style: AppTypography.caption,
+                                      ),
+                                      onTap: _isLoading ? null : _handleExport,
+                                    ),
+                                  ),
+                                  const Divider(height: 1, thickness: 1, color: AppColors.borderLight),
+                                  Material(
+                                    color: Colors.transparent,
+                                    child: ListTile(
+                                      leading: const Icon(
+                                        Icons.download_outlined,
+                                        color: AppColors.textPrimary,
+                                      ),
+                                      title: const Text('Import', style: AppTypography.body),
+                                      subtitle: const Text(
+                                        'Pulihkan data dari file ZIP backup',
+                                        style: AppTypography.caption,
+                                      ),
+                                      onTap: _isLoading ? null : _handleImport,
+                                    ),
+                                  ),
+                                ],
+                              )
+                            : const SizedBox.shrink(),
                       ),
-                      const Divider(height: 1, thickness: 1, color: AppColors.borderLight),
-                      Material(
-                        color: Colors.transparent,
-                        child: ListTile(
-                          leading: const Icon(
-                            Icons.download_outlined,
-                            color: AppColors.textPrimary,
-                          ),
-                          title: const Text('Import', style: AppTypography.body),
-                          subtitle: const Text(
-                            'Pulihkan data dari file ZIP backup',
-                            style: AppTypography.caption,
-                          ),
-                          onTap: _isLoading ? null : _handleImport,
-                        ),
-                      ),
-                    ],
+                    ),
                   ],
                 ),
               ),

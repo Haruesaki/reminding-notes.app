@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import '../di/injection_container.dart';
@@ -13,6 +14,34 @@ import '../../features/notes/presentation/pages/reminders_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 
 class AppRouter {
+  /// Transisi halaman: Fade-through/shared-axis horizontal 250ms (PRD 4.4)
+  static Page<dynamic> _buildFadeThroughPage(GoRouterState state, Widget child) {
+    return CustomTransitionPage(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 250),
+      reverseTransitionDuration: const Duration(milliseconds: 250),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+        final slideAnimation = Tween<Offset>(
+          begin: const Offset(0.04, 0.0),
+          end: Offset.zero,
+        ).animate(curvedAnimation);
+        return FadeTransition(
+          opacity: curvedAnimation,
+          child: SlideTransition(
+            position: slideAnimation,
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   // Routes for Home, Folder, and Note Editor screens
   static final router = GoRouter(
     initialLocation: '/',
@@ -20,32 +49,12 @@ class AppRouter {
       GoRoute(
         path: '/',
         name: 'home',
-        builder: (context, state) => MultiBlocProvider(
-          providers: [
-            BlocProvider(
-              create: (_) => sl<NoteListBloc>()..add(const LoadNotes()),
-            ),
-            BlocProvider(
-              create: (_) =>
-                  sl<DeadlineCalendarCubit>()..loadDeadlines(),
-            ),
-            BlocProvider.value(
-              value: sl<CopyMoveCubit>(),
-            ),
-          ],
-          child: const HomePage(),
-        ),
-      ),
-      GoRoute(
-        path: '/folder',
-        name: 'folder',
-        builder: (context, state) {
-          final folderPath = state.uri.queryParameters['path'] ?? '';
-          return MultiBlocProvider(
+        pageBuilder: (context, state) => _buildFadeThroughPage(
+          state,
+          MultiBlocProvider(
             providers: [
               BlocProvider(
-                create: (_) => sl<NoteListBloc>()
-                  ..add(LoadNotes(folderRelativePath: folderPath)),
+                create: (_) => sl<NoteListBloc>()..add(const LoadNotes()),
               ),
               BlocProvider(
                 create: (_) =>
@@ -55,58 +64,99 @@ class AppRouter {
                 value: sl<CopyMoveCubit>(),
               ),
             ],
-            child: HomePage(folderRelativePath: folderPath),
+            child: const HomePage(),
+          ),
+        ),
+      ),
+      GoRoute(
+        path: '/folder',
+        name: 'folder',
+        pageBuilder: (context, state) {
+          final folderPath = state.uri.queryParameters['path'] ?? '';
+          return _buildFadeThroughPage(
+            state,
+            MultiBlocProvider(
+              providers: [
+                BlocProvider(
+                  create: (_) => sl<NoteListBloc>()
+                    ..add(LoadNotes(folderRelativePath: folderPath)),
+                ),
+                BlocProvider(
+                  create: (_) =>
+                      sl<DeadlineCalendarCubit>()..loadDeadlines(),
+                ),
+                BlocProvider.value(
+                  value: sl<CopyMoveCubit>(),
+                ),
+              ],
+              child: HomePage(folderRelativePath: folderPath),
+            ),
           );
         },
       ),
       GoRoute(
         path: '/editor-placeholder/:type',
         name: 'editor-placeholder',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final type = state.pathParameters['type'] ?? 'Page';
           final folder = state.uri.queryParameters['folder'] ?? '';
-          return EditorPlaceholderPage(
-            fileType: type.toLowerCase() == 'list' ? 'List' : 'Page',
-            folderRelativePath: folder,
+          return _buildFadeThroughPage(
+            state,
+            EditorPlaceholderPage(
+              fileType: type.toLowerCase() == 'list' ? 'List' : 'Page',
+              folderRelativePath: folder,
+            ),
           );
         },
       ),
       GoRoute(
         path: '/note/:id',
         name: 'note-editor',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final noteId = state.pathParameters['id'];
           final folder = state.uri.queryParameters['folder'] ?? '';
-          return NoteEditorPage(
-            noteId: noteId,
-            folderRelativePath: folder,
+          return _buildFadeThroughPage(
+            state,
+            NoteEditorPage(
+              noteId: noteId,
+              folderRelativePath: folder,
+            ),
           );
         },
       ),
       GoRoute(
         path: '/list/:id',
         name: 'list-editor',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final listId = state.pathParameters['id'];
           final folder = state.uri.queryParameters['folder'] ?? '';
-          return ListEditorPage(
-            noteId: listId,
-            folderRelativePath: folder,
+          return _buildFadeThroughPage(
+            state,
+            ListEditorPage(
+              noteId: listId,
+              folderRelativePath: folder,
+            ),
           );
         },
       ),
       GoRoute(
         path: '/reminders',
         name: 'reminders',
-        builder: (context, state) => BlocProvider(
-          create: (_) => sl<DeadlineCalendarCubit>()..loadDeadlines(),
-          child: const RemindersPage(),
+        pageBuilder: (context, state) => _buildFadeThroughPage(
+          state,
+          BlocProvider(
+            create: (_) => sl<DeadlineCalendarCubit>()..loadDeadlines(),
+            child: const RemindersPage(),
+          ),
         ),
       ),
       GoRoute(
         path: '/settings',
         name: 'settings',
-        builder: (context, state) => const SettingsPage(),
+        pageBuilder: (context, state) => _buildFadeThroughPage(
+          state,
+          const SettingsPage(),
+        ),
       ),
     ],
   );
