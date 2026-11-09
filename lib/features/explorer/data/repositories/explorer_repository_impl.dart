@@ -1,11 +1,16 @@
+import '../../../notes/domain/services/reminder_sync_service.dart';
 import '../../domain/entities/entities.dart';
 import '../../domain/repositories/explorer_repository.dart';
 import '../datasources/local_storage_data_source.dart';
 
 class ExplorerRepositoryImpl implements ExplorerRepository {
   final LocalStorageDataSource localDataSource;
+  final ReminderSyncService? reminderSyncService;
 
-  ExplorerRepositoryImpl({required this.localDataSource});
+  ExplorerRepositoryImpl({
+    required this.localDataSource,
+    this.reminderSyncService,
+  });
 
   @override
   Future<List<NodeEntry>> getFolderContents(String relativePath) {
@@ -34,11 +39,15 @@ class ExplorerRepositoryImpl implements ExplorerRepository {
   }
 
   @override
-  Future<FileEntry> renameFile({required String fileRelativePath, required String newTitle}) {
-    return localDataSource.renameFile(
+  Future<FileEntry> renameFile({required String fileRelativePath, required String newTitle}) async {
+    final renamed = await localDataSource.renameFile(
       fileRelativePath: fileRelativePath,
       newTitle: newTitle,
     );
+    if (renamed is ListFile && reminderSyncService != null) {
+      await reminderSyncService!.syncListFile(renamed);
+    }
+    return renamed;
   }
 
   @override
@@ -55,11 +64,15 @@ class ExplorerRepositoryImpl implements ExplorerRepository {
   }
 
   @override
-  Future<ListFile> saveList(ListFile listFile, {String? targetFolderRelativePath}) {
-    return localDataSource.writeList(
+  Future<ListFile> saveList(ListFile listFile, {String? targetFolderRelativePath}) async {
+    final saved = await localDataSource.writeList(
       listFile,
       targetFolderRelativePath: targetFolderRelativePath,
     );
+    if (reminderSyncService != null) {
+      await reminderSyncService!.syncListFile(saved);
+    }
+    return saved;
   }
 
   @override
@@ -68,30 +81,64 @@ class ExplorerRepositoryImpl implements ExplorerRepository {
   }
 
   @override
-  Future<void> deleteEntry(NodeEntry entry) {
-    return localDataSource.deleteEntry(entry);
+  Future<void> deleteEntry(NodeEntry entry) async {
+    List<ListFile> affectedLists = const [];
+    if (reminderSyncService != null) {
+      if (entry.isFolder) {
+        affectedLists = await localDataSource.collectListFilesRecursive(entry.relativePath);
+      } else if (entry is ListFile) {
+        try {
+          affectedLists = [await localDataSource.readList(entry.relativePath)];
+        } catch (_) {
+          affectedLists = [entry];
+        }
+      }
+    }
+    await localDataSource.deleteEntry(entry);
+    if (reminderSyncService != null) {
+      if (entry.isFolder) {
+        await reminderSyncService!.cancelFolderReminders(affectedLists);
+      } else if (affectedLists.isNotEmpty) {
+        await reminderSyncService!.cancelListFileReminders(affectedLists.first);
+      }
+    }
   }
 
   @override
   Future<NodeEntry> moveEntry({
     required NodeEntry entry,
     required String destinationFolderRelativePath,
-  }) {
-    return localDataSource.moveEntry(
+  }) async {
+    final moved = await localDataSource.moveEntry(
       entry: entry,
       destinationFolderRelativePath: destinationFolderRelativePath,
     );
+    if (reminderSyncService != null) {
+      if (moved is ListFile) {
+        await reminderSyncService!.syncListFile(moved);
+      } else if (moved is Folder) {
+        final affected = await localDataSource.collectListFilesRecursive(moved.relativePath);
+        for (final listFile in affected) {
+          await reminderSyncService!.syncListFile(listFile);
+        }
+      }
+    }
+    return moved;
   }
 
   @override
   Future<FileEntry> copyFile({
     required FileEntry file,
     required String destinationFolderRelativePath,
-  }) {
-    return localDataSource.copyFile(
+  }) async {
+    final copied = await localDataSource.copyFile(
       file: file,
       destinationFolderRelativePath: destinationFolderRelativePath,
     );
+    if (copied is ListFile && reminderSyncService != null) {
+      await reminderSyncService!.syncListFile(copied);
+    }
+    return copied;
   }
 
   @override

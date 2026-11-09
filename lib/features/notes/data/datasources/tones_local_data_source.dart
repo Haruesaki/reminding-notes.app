@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/migration/data_access_mode.dart';
+import '../../../../core/migration/migration_runner.dart';
 import '../../../explorer/data/models/task_models.dart';
 import '../../../explorer/domain/entities/tone_ref.dart';
 import '../../../../core/utils/atomic_file_writer.dart';
@@ -20,22 +22,42 @@ class ToneFileSizeLimitException implements Exception {
 class TonesLocalDataSource {
   final Directory assetsDir;
   final Directory? notesDir;
+  final DataAccessMode? dataAccessMode;
   final MediaStoreService _mediaStoreService;
   final Uuid _uuid;
 
   TonesLocalDataSource({
     required this.assetsDir,
     this.notesDir,
+    this.dataAccessMode,
     MediaStoreService? mediaStoreService,
     Uuid? uuid,
   })  : _mediaStoreService = mediaStoreService ?? MediaStoreService(),
         _uuid = uuid ?? const Uuid();
+
+  void _ensureWritable() {
+    if (dataAccessMode?.hasMigrationError == true) {
+      throw StateError('Aplikasi dalam status gagal migrasi.');
+    }
+    dataAccessMode?.ensureWritable();
+  }
+
+  void _inspectSchemaVersion(Map<String, dynamic> map) {
+    final version = (map['schemaVersion'] as num?)?.toInt() ?? 1;
+    if (version > MigrationRunner.currentSchemaVersion) {
+      dataAccessMode?.markReadOnly(detectedVersion: version);
+    }
+  }
 
   Directory get tonesDir => Directory(p.join(assetsDir.path, 'tones'));
   File get tonesMetaFile => File(p.join(assetsDir.path, 'tones.json'));
 
   /// Memastikan folder assets dan tones.json tersedia, serta pulihkan *.tmp yatim
   Future<void> init() async {
+    if (dataAccessMode?.hasMigrationError == true ||
+        dataAccessMode?.isReadOnly == true) {
+      return;
+    }
     if (!await assetsDir.exists()) {
       await assetsDir.create(recursive: true);
     }
@@ -49,22 +71,36 @@ class TonesLocalDataSource {
         'tones': <Map<String, dynamic>>[],
       };
       await _atomicWrite(tonesMetaFile, initialData);
+    } else {
+      try {
+        final text = await tonesMetaFile.readAsString();
+        final map = jsonDecode(text);
+        if (map is Map<String, dynamic>) {
+          _inspectSchemaVersion(map);
+        }
+      } catch (_) {}
     }
   }
 
   Future<void> _atomicWrite(File target, Map<String, dynamic> json) async {
+    _ensureWritable();
     await AtomicFileWriter.writeJson(target, json, uuid: _uuid);
   }
 
   /// Membaca daftar nada dari tones.json
   Future<List<ToneRef>> getTones() async {
     if (!tonesMetaFile.existsSync()) {
+      if (dataAccessMode?.isReadOnly == true ||
+          dataAccessMode?.hasMigrationError == true) {
+        return [];
+      }
       await init();
       return [];
     }
     try {
       final text = await tonesMetaFile.readAsString();
       final map = jsonDecode(text) as Map<String, dynamic>;
+      _inspectSchemaVersion(map);
       final list = map['tones'] as List<dynamic>? ?? [];
       return list
           .map((e) => ToneRefModel.fromJson(e as Map<String, dynamic>))
@@ -89,6 +125,7 @@ class TonesLocalDataSource {
     required String name,
     String? contentUri,
   }) async {
+    _ensureWritable();
     await init();
 
     final size = await sourceFile.length();
@@ -127,6 +164,7 @@ class TonesLocalDataSource {
 
   /// Menghapus nada dari disk dan metadata
   Future<void> deleteTone(String toneId) async {
+    _ensureWritable();
     final currentTones = await getTones();
     final index = currentTones.indexWhere((t) => t.id == toneId);
     if (index == -1) return;
@@ -186,6 +224,7 @@ class TonesLocalDataSource {
 
   /// Mengembalikan task yang memakai nada ke Bawaan Sistem (null)
   Future<void> resetToneInTasks(String toneId) async {
+    _ensureWritable();
     if (notesDir == null || !notesDir!.existsSync()) return;
     final jsonFiles = notesDir!
         .listSync(recursive: true)
@@ -236,6 +275,7 @@ class TonesLocalDataSource {
 
   /// Mendaftarkan ulang semua nada ke sistem MediaStore setelah import (PRD 7.11)
   Future<void> reRegisterAllTones() async {
+    _ensureWritable();
     final tones = await getTones();
     final updatedTones = <ToneRef>[];
     for (final tone in tones) {

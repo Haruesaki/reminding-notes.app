@@ -19,3 +19,16 @@ class ValidationFailure extends Failure {
 class NotFoundFailure extends Failure {
   const NotFoundFailure([super.message = 'Resource not found']);
 }
+
+class ReadOnlyDataException implements Exception {
+  final String message;
+  final int? detectedVersion;
+
+  const ReadOnlyDataException([
+    this.message = 'Data dibuat oleh versi aplikasi yang lebih baru. Mode baca saja.',
+    this.detectedVersion,
+  ]);
+
+  @override
+  String toString() => 'ReadOnlyDataException: $message';
+}

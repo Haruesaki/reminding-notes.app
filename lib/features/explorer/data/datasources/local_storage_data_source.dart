@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
+import '../../../../core/migration/data_access_mode.dart';
+import '../../../../core/migration/migration_runner.dart';
 import '../../../../core/utils/atomic_file_writer.dart';
 import '../../../../core/utils/display_order_sorter.dart';
 import '../../../../core/utils/name_sanitizer.dart';
@@ -16,13 +18,29 @@ import 'notes_index_manager.dart';
 class LocalStorageDataSource {
   final Directory rootDir;
   final NotesIndexManager? indexManager;
+  final DataAccessMode? dataAccessMode;
   final Uuid _uuid;
 
   LocalStorageDataSource({
     required this.rootDir,
     this.indexManager,
+    this.dataAccessMode,
     Uuid? uuid,
   }) : _uuid = uuid ?? const Uuid();
+
+  void _ensureWritable() {
+    if (dataAccessMode?.hasMigrationError == true) {
+      throw StateError('Aplikasi dalam status gagal migrasi.');
+    }
+    dataAccessMode?.ensureWritable();
+  }
+
+  void _inspectSchemaVersion(Map<String, dynamic> map) {
+    final version = (map['schemaVersion'] as num?)?.toInt() ?? 1;
+    if (version > MigrationRunner.currentSchemaVersion) {
+      dataAccessMode?.markReadOnly(detectedVersion: version);
+    }
+  }
 
   /// Mengembalikan path absolut dari relativePath
   Directory _resolveDirectory(String relativePath) {
@@ -38,11 +56,22 @@ class LocalStorageDataSource {
 
   /// Atomic write: tulis ke *.tmp unik lalu rename langsung ke target (PRD 6.1, 6.7)
   Future<void> _atomicWrite(File targetFile, Map<String, dynamic> jsonMap) async {
+    _ensureWritable();
     await AtomicFileWriter.writeJson(targetFile, jsonMap, uuid: _uuid);
   }
 
   /// Memastikan folder root dan _folder.json root sudah dibuat, serta pulihkan *.tmp yatim
   Future<void> init() async {
+    if (dataAccessMode?.hasMigrationError == true) {
+      return;
+    }
+    if (dataAccessMode?.isReadOnly == true) {
+      if (indexManager != null && await rootDir.exists()) {
+        await indexManager!.rebuildIndex(rootDir);
+      }
+      return;
+    }
+
     if (!await rootDir.exists()) {
       await rootDir.create(recursive: true);
     }
@@ -72,7 +101,7 @@ class LocalStorageDataSource {
     }
     final metaFile = File(p.join(dir.path, '_folder.json'));
     if (!metaFile.existsSync()) {
-      // Auto-create jika belum ada
+      // Auto-create jika belum ada (kecuali mode baca-saja/error migrasi)
       final folderId = _uuid.v4();
       final folderName = relativePath.isEmpty ? 'root' : p.basename(dir.path);
       final model = FolderModel(
@@ -82,12 +111,16 @@ class LocalStorageDataSource {
         createdAt: DateTime.now().toUtc(),
         order: const [],
       );
-      await _atomicWrite(metaFile, model.toJson());
+      if (dataAccessMode?.isReadOnly != true &&
+          dataAccessMode?.hasMigrationError != true) {
+        await _atomicWrite(metaFile, model.toJson());
+      }
       return model;
     }
 
     final content = metaFile.readAsStringSync(encoding: utf8);
     final jsonMap = json.decode(content) as Map<String, dynamic>;
+    _inspectSchemaVersion(jsonMap);
     return FolderModel.fromJson(jsonMap, relativePath: relativePath);
   }
 
@@ -120,6 +153,7 @@ class LocalStorageDataSource {
         try {
           final content = entity.readAsStringSync(encoding: utf8);
           final map = json.decode(content) as Map<String, dynamic>;
+          _inspectSchemaVersion(map);
           final type = map['type'] as String? ?? 'page';
           if (type == 'page') {
             entries.add(PageFileModel.fromJson(map, relativePath: relPath));
@@ -144,6 +178,7 @@ class LocalStorageDataSource {
     }
     final content = await file.readAsString(encoding: utf8);
     final map = json.decode(content) as Map<String, dynamic>;
+    _inspectSchemaVersion(map);
     return PageFileModel.fromJson(map, relativePath: relativePath);
   }
 
@@ -155,11 +190,42 @@ class LocalStorageDataSource {
     }
     final content = await file.readAsString(encoding: utf8);
     final map = json.decode(content) as Map<String, dynamic>;
+    _inspectSchemaVersion(map);
     return ListFileModel.fromJson(map, relativePath: relativePath);
+  }
+
+  /// Mengumpulkan seluruh file List di dalam folder secara rekursif (untuk pembatalan jadwal saat hapus folder).
+  Future<List<ListFile>> collectListFilesRecursive(String folderRelativePath) async {
+    final dir = _resolveDirectory(folderRelativePath);
+    if (!await dir.exists()) return const [];
+    final results = <ListFile>[];
+    await for (final entity in dir.list(recursive: true, followLinks: false)) {
+      if (entity is! File) continue;
+      final name = p.basename(entity.path);
+      if (!name.endsWith('.json') ||
+          name == '_folder.json' ||
+          name.endsWith('.tmp') ||
+          name.endsWith('.bak')) {
+        continue;
+      }
+      try {
+        final content = await entity.readAsString(encoding: utf8);
+        final map = json.decode(content) as Map<String, dynamic>;
+        _inspectSchemaVersion(map);
+        if (map['type'] == 'list') {
+          final relPath = p
+              .relative(entity.path, from: rootDir.path)
+              .replaceAll(r'\', '/');
+          results.add(ListFileModel.fromJson(map, relativePath: relPath));
+        }
+      } catch (_) {}
+    }
+    return results;
   }
 
   /// Menulis/Menyimpan PageFile
   Future<PageFileModel> writePage(PageFile page, {String? targetFolderRelativePath}) async {
+    _ensureWritable();
     final folderRel = targetFolderRelativePath ??
         (page.relativePath.contains('/') ? p.dirname(page.relativePath) : '');
     final dir = _resolveDirectory(folderRel);
@@ -233,6 +299,7 @@ class LocalStorageDataSource {
 
   /// Menulis/Menyimpan ListFile
   Future<ListFileModel> writeList(ListFile listFile, {String? targetFolderRelativePath}) async {
+    _ensureWritable();
     final folderRel = targetFolderRelativePath ??
         (listFile.relativePath.contains('/') ? p.dirname(listFile.relativePath) : '');
     final dir = _resolveDirectory(folderRel);
@@ -308,6 +375,7 @@ class LocalStorageDataSource {
     required String name,
     String parentRelativePath = '',
   }) async {
+    _ensureWritable();
     final parentDir = _resolveDirectory(parentRelativePath);
     if (!parentDir.existsSync()) {
       parentDir.createSync(recursive: true);
@@ -352,6 +420,7 @@ class LocalStorageDataSource {
     required String folderRelativePath,
     required String newName,
   }) async {
+    _ensureWritable();
     final oldDir = _resolveDirectory(folderRelativePath);
     if (!await oldDir.exists()) {
       throw FileSystemException('Folder not found', oldDir.path);
@@ -399,6 +468,7 @@ class LocalStorageDataSource {
     required String fileRelativePath,
     required String newTitle,
   }) async {
+    _ensureWritable();
     final file = _resolveFile(fileRelativePath);
     if (!await file.exists()) {
       throw FileSystemException('File not found', file.path);
@@ -456,6 +526,7 @@ class LocalStorageDataSource {
 
   /// Menghapus file atau folder
   Future<void> deleteEntry(NodeEntry entry) async {
+    _ensureWritable();
     final parentRel = entry.relativePath.contains('/') ? p.dirname(entry.relativePath) : '';
 
     if (entry.isFolder) {
@@ -482,6 +553,7 @@ class LocalStorageDataSource {
     required NodeEntry entry,
     required String destinationFolderRelativePath,
   }) async {
+    _ensureWritable();
     final oldParentRel = entry.relativePath.contains('/') ? p.dirname(entry.relativePath) : '';
     if (oldParentRel == destinationFolderRelativePath) {
       return entry; // Sudah berada di folder yang sama (PRD 7.8)
@@ -602,6 +674,7 @@ class LocalStorageDataSource {
     required FileEntry file,
     required String destinationFolderRelativePath,
   }) async {
+    _ensureWritable();
     final newId = _uuid.v4();
     final baseTitle = file.title;
     final destDir = _resolveDirectory(destinationFolderRelativePath);
@@ -665,6 +738,7 @@ class LocalStorageDataSource {
 
   /// Mengubah status favorit sebuah file
   Future<FileEntry> toggleFavorite(FileEntry file) async {
+    _ensureWritable();
     final isFav = file.isFavorite;
     final updatedFav = isFav ? null : DateTime.now().toUtc();
 
@@ -709,6 +783,7 @@ class LocalStorageDataSource {
     required String folderRelativePath,
     required List<String> newOrder,
   }) async {
+    _ensureWritable();
     final folder = await getFolder(folderRelativePath);
     final updated = folder.copyWith(order: newOrder);
     final metaFile = File(p.join(_resolveDirectory(folderRelativePath).path, '_folder.json'));
@@ -723,6 +798,7 @@ class LocalStorageDataSource {
     }
     final content = await file.readAsString(encoding: utf8);
     final map = jsonDecode(content) as Map<String, dynamic>;
+    _inspectSchemaVersion(map);
     final type = map['type'] as String? ?? 'page';
     if (type == 'list') {
       return ListFileModel.fromJson(map, relativePath: relativePath);

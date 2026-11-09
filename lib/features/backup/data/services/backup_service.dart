@@ -7,12 +7,15 @@ import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/constants/app_constants.dart';
+import '../../../../core/migration/data_access_mode.dart';
 import '../../../../core/migration/migration_runner.dart';
 import '../../../../core/utils/name_sanitizer.dart';
+import '../../../explorer/data/datasources/notes_index_manager.dart';
 import '../../../explorer/data/models/list_file_model.dart';
 import '../../../explorer/domain/entities/list_file.dart';
 import '../../../notes/data/datasources/tones_local_data_source.dart';
 import '../../../notes/data/services/notification_service.dart';
+import '../../../notes/domain/services/reminder_sync_service.dart';
 import '../../domain/models/backup_exceptions.dart';
 import '../../domain/models/backup_manifest.dart';
 
@@ -45,6 +48,18 @@ class BackupInspectionResult {
 }
 
 class BackupService {
+  final DataAccessMode? dataAccessMode;
+  final NotesIndexManager? indexManager;
+  final TonesLocalDataSource? tonesDataSource;
+  final ReminderSyncService? reminderSyncService;
+
+  BackupService({
+    this.dataAccessMode,
+    this.indexManager,
+    this.tonesDataSource,
+    this.reminderSyncService,
+  });
+
   /// Top-level/static entry point yang dieksekusi di Isolate untuk membuat ZIP backup
   static Uint8List createBackupBytes(BackupParams params) {
     final archive = Archive();
@@ -244,13 +259,20 @@ class BackupService {
       throw CorruptedBackupException(corruptedFiles);
     }
 
-    // 4. Migrasi otomatis jika versi lama (PRD 6.7)
-    if (manifest.schemaVersion < AppConstants.schemaVersion) {
-      final dataDir = Directory(p.join(tempExtractDir.path, 'data'));
-      if (dataDir.existsSync()) {
-        final runner = MigrationRunner(targetVersion: AppConstants.schemaVersion);
-        await runner.migrateDirectory(dataDir);
-      }
+    // 4. Validasi versi & migrasi otomatis jika versi lama (PRD 6.7)
+    final dataDir = Directory(p.join(tempExtractDir.path, 'data'));
+    final extractedTonesFile = File(p.join(tempExtractDir.path, 'assets', 'tones.json'));
+    final runner = MigrationRunner(targetVersion: AppConstants.schemaVersion);
+    final migrationResult = await runner.migrateStartup(
+      notesDir: dataDir,
+      tonesFile: extractedTonesFile,
+    );
+    if (migrationResult.hasNewerSchemaVersion &&
+        migrationResult.maxDetectedVersion != null) {
+      throw NewerSchemaVersionException(
+        migrationResult.maxDetectedVersion!,
+        AppConstants.schemaVersion,
+      );
     }
 
     return BackupInspectionResult(
@@ -266,6 +288,10 @@ class BackupService {
     required Directory assetsDir,
     required Directory tempSafetyDir,
   }) async {
+    if (dataAccessMode?.hasMigrationError == true) {
+      throw StateError('Aplikasi dalam status gagal migrasi.');
+    }
+    dataAccessMode?.ensureWritable();
     // 1. Buat safety backup
     if (tempSafetyDir.existsSync()) {
       tempSafetyDir.deleteSync(recursive: true);
@@ -335,6 +361,16 @@ class BackupService {
         } catch (_) {}
       }
     }
+
+    if (indexManager != null) {
+      await indexManager!.rebuildIndex(notesDir);
+    }
+    if (tonesDataSource != null) {
+      await tonesDataSource!.reRegisterAllTones();
+    }
+    if (reminderSyncService != null) {
+      await reminderSyncService!.reconcileAllReminders(forceRescheduleAll: true);
+    }
   }
 
   /// Eksekusi Impor Mode "Gabungkan" (Merge) (PRD 7.11)
@@ -344,6 +380,10 @@ class BackupService {
     required Directory notesDir,
     required Directory assetsDir,
   }) async {
+    if (dataAccessMode?.hasMigrationError == true) {
+      throw StateError('Aplikasi dalam status gagal migrasi.');
+    }
+    dataAccessMode?.ensureWritable();
     final sourceDataDir = Directory(p.join(extractDir.path, 'data'));
     if (sourceDataDir.existsSync()) {
       if (!notesDir.existsSync()) {
@@ -413,6 +453,16 @@ class BackupService {
           );
         } catch (_) {}
       }
+    }
+
+    if (indexManager != null) {
+      await indexManager!.rebuildIndex(notesDir);
+    }
+    if (tonesDataSource != null) {
+      await tonesDataSource!.reRegisterAllTones();
+    }
+    if (reminderSyncService != null) {
+      await reminderSyncService!.reconcileAllReminders(forceRescheduleAll: true);
     }
   }
 
@@ -495,6 +545,7 @@ class BackupService {
 
           // Cek bentrok nama
           final String finalFileName;
+          bool regeneratedIds = false;
           if (existingNames.map((e) => e.toLowerCase()).contains(name.toLowerCase())) {
             final baseName = p.basenameWithoutExtension(name);
             final resolvedName = NameSanitizer.resolveImportCollision(
@@ -505,11 +556,38 @@ class BackupService {
             finalFileName = resolvedName;
             title = p.basenameWithoutExtension(resolvedName);
             fileId = uuid.v4(); // Generate new ID on collision
+            regeneratedIds = true;
           } else {
             finalFileName = name;
             if (existingIds.contains(fileId)) {
               fileId = uuid.v4();
+              regeneratedIds = true;
             }
+          }
+
+          if (regeneratedIds &&
+              jsonMap['type'] == 'list' &&
+              jsonMap['tasks'] is List) {
+            final rawTasks = jsonMap['tasks'] as List<dynamic>;
+            jsonMap['tasks'] = rawTasks.map((item) {
+              if (item is Map<String, dynamic>) {
+                final copiedTask = Map<String, dynamic>.from(item);
+                copiedTask['id'] = uuid.v4();
+                if (copiedTask['subtasks'] is List) {
+                  copiedTask['subtasks'] =
+                      (copiedTask['subtasks'] as List<dynamic>).map((sub) {
+                    if (sub is Map<String, dynamic>) {
+                      final copiedSub = Map<String, dynamic>.from(sub);
+                      copiedSub['id'] = uuid.v4();
+                      return copiedSub;
+                    }
+                    return sub;
+                  }).toList();
+                }
+                return copiedTask;
+              }
+              return item;
+            }).toList();
           }
 
           jsonMap['id'] = fileId;

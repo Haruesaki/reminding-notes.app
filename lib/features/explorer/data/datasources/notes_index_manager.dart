@@ -3,6 +3,8 @@ import 'dart:io';
 import 'package:equatable/equatable.dart';
 import 'package:path/path.dart' as p;
 
+import '../../../../core/migration/data_access_mode.dart';
+import '../../../../core/migration/migration_runner.dart';
 import '../../../../core/utils/atomic_file_writer.dart';
 
 class IndexFileEntry extends Equatable {
@@ -145,14 +147,30 @@ class AppIndexData extends Equatable {
 
 class NotesIndexManager {
   final Directory supportDir;
+  final DataAccessMode? dataAccessMode;
 
-  NotesIndexManager({required this.supportDir});
+  NotesIndexManager({
+    required this.supportDir,
+    this.dataAccessMode,
+  });
 
   File get indexFile => File(p.join(supportDir.path, 'index.json'));
 
+  void _inspectSchemaVersion(Map<String, dynamic> map) {
+    final version = (map['schemaVersion'] as num?)?.toInt() ?? 1;
+    if (version > MigrationRunner.currentSchemaVersion) {
+      dataAccessMode?.markReadOnly(detectedVersion: version);
+    }
+  }
+
   Future<AppIndexData> loadIndex() async {
+    if (dataAccessMode?.hasMigrationError == true) {
+      return const AppIndexData();
+    }
     final file = indexFile;
-    await AtomicFileWriter.recoverTargetOrphans(file);
+    if (dataAccessMode?.isReadOnly != true) {
+      await AtomicFileWriter.recoverTargetOrphans(file);
+    }
     if (!await file.exists()) {
       return const AppIndexData();
     }
@@ -171,17 +189,23 @@ class NotesIndexManager {
   }
 
   Future<void> saveIndex(AppIndexData data) async {
+    dataAccessMode?.ensureWritable();
     await AtomicFileWriter.writeJson(indexFile, data.toMap());
   }
 
   /// Membangun ulang indeks dari pohon direktori notes_data secara lengkap
   Future<AppIndexData> rebuildIndex(Directory notesDataDir) async {
+    if (dataAccessMode?.hasMigrationError == true) {
+      return const AppIndexData();
+    }
     final files = <IndexFileEntry>[];
     final deadlines = <IndexDeadlineEntry>[];
 
     if (!await notesDataDir.exists()) {
-      final empty = const AppIndexData();
-      await saveIndex(empty);
+      const empty = AppIndexData();
+      if (dataAccessMode?.isReadOnly != true) {
+        await saveIndex(empty);
+      }
       return empty;
     }
 
@@ -191,13 +215,22 @@ class NotesIndexManager {
     for (final entity in entities) {
       if (entity is File && entity.path.endsWith('.json')) {
         final filename = p.basename(entity.path);
-        if (filename == '_folder.json' || filename.endsWith('.tmp') || filename.endsWith('.bak')) {
+        if (filename.endsWith('.tmp') || filename.endsWith('.bak')) {
+          continue;
+        }
+        if (filename == '_folder.json') {
+          try {
+            final content = entity.readAsStringSync(encoding: utf8);
+            final map = json.decode(content) as Map<String, dynamic>;
+            _inspectSchemaVersion(map);
+          } catch (_) {}
           continue;
         }
 
         try {
           final content = entity.readAsStringSync(encoding: utf8);
           final map = json.decode(content) as Map<String, dynamic>;
+          _inspectSchemaVersion(map);
           final type = map['type'] as String? ?? 'page';
           final id = map['id'] as String? ?? '';
           final title = map['title'] as String? ?? '';
@@ -271,7 +304,9 @@ class NotesIndexManager {
       deadlines: deadlines,
     );
 
-    await saveIndex(newIndex);
+    if (dataAccessMode?.isReadOnly != true) {
+      await saveIndex(newIndex);
+    }
     return newIndex;
   }
 }

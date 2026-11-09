@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import '../migration/data_access_mode.dart';
 import '../../features/explorer/domain/entities/entities.dart';
 import '../../features/explorer/domain/repositories/explorer_repository.dart';
 
@@ -9,7 +10,15 @@ class DemoSeeder {
   static const bool isDemoFlagEnabled =
       bool.fromEnvironment('SEED_DEMO', defaultValue: false);
 
-  static Future<void> seedIfEmpty(ExplorerRepository repository) async {
+  static Future<void> seedIfEmpty(
+    ExplorerRepository repository, {
+    DataAccessMode? dataAccessMode,
+  }) async {
+    if (dataAccessMode?.isReadOnly == true ||
+        dataAccessMode?.hasMigrationError == true) {
+      return;
+    }
+
     // Only in debug mode and if SEED_DEMO=true
     if (!kDebugMode || !isDemoFlagEnabled) {
       return;
