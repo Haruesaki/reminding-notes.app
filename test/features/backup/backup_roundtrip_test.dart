@@ -108,15 +108,18 @@ void main() {
 
     // Siapkan assets (tones.json dan nada)
     final tonesJson = File(p.join(assetsDir.path, 'tones.json'));
-    tonesJson.writeAsStringSync(jsonEncode([
-      {
-        'id': 'tone-1',
-        'title': 'Bell Custom',
-        'fileName': 'bell.mp3',
-        'filePath': 'tones/bell.mp3',
-        'isCustom': true,
-      }
-    ]));
+    tonesJson.writeAsStringSync(jsonEncode({
+      'schemaVersion': MigrationRunner.currentSchemaVersion,
+      'tones': [
+        {
+          'id': 'tone-1',
+          'title': 'Bell Custom',
+          'fileName': 'bell.mp3',
+          'filePath': 'tones/bell.mp3',
+          'isCustom': true,
+        }
+      ],
+    }));
 
     final tonesSubdir = Directory(p.join(assetsDir.path, 'tones'))..createSync();
     final toneAudio = File(p.join(tonesSubdir.path, 'bell.mp3'));

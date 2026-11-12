@@ -1,5 +1,7 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart';
+import 'package:reminding/core/error/failures.dart';
+import 'package:reminding/core/migration/data_access_mode.dart';
 import 'package:reminding/features/explorer/domain/entities/entities.dart';
 import 'package:reminding/features/explorer/domain/repositories/explorer_repository.dart';
 import 'note_editor_event.dart';
@@ -7,10 +9,14 @@ import 'note_editor_state.dart';
 
 class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
   final ExplorerRepository repository;
+  final DataAccessMode? dataAccessMode;
   final Uuid _uuid = const Uuid();
   String _folderRelativePath = '';
 
-  NoteEditorBloc({required this.repository}) : super(NoteEditorInitial()) {
+  NoteEditorBloc({
+    required this.repository,
+    this.dataAccessMode,
+  }) : super(NoteEditorInitial()) {
     on<InitializeNote>(_onInitializeNote);
     on<UpdateTitle>(_onUpdateTitle);
     on<UpdateContentDelta>(_onUpdateContentDelta);
@@ -142,6 +148,10 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
     Emitter<NoteEditorState> emit,
   ) async {
     if (state is NoteEditorLoaded) {
+      if (dataAccessMode?.isReadOnly == true) {
+        emit((state as NoteEditorLoaded).copyWith(isDirty: false));
+        return;
+      }
       final current = state as NoteEditorLoaded;
       if (current.note.title.trim().isEmpty && current.note.plainText.trim().isEmpty) {
         return;
@@ -161,6 +171,8 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
           isDirty: false,
           isNew: false,
         ));
+      } on ReadOnlyDataException {
+        emit(current.copyWith(isSaving: false, isDirty: false));
       } catch (e) {
         emit(NoteEditorError(e.toString()));
       }
@@ -171,6 +183,7 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
     DiscardEmptyNoteEvent event,
     Emitter<NoteEditorState> emit,
   ) async {
+    if (dataAccessMode?.isReadOnly == true) return;
     if (state is NoteEditorLoaded) {
       final current = state as NoteEditorLoaded;
       if (current.note.relativePath.isNotEmpty) {
@@ -185,6 +198,7 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
     TogglePinInEditor event,
     Emitter<NoteEditorState> emit,
   ) async {
+    if (dataAccessMode?.isReadOnly == true) return;
     if (state is NoteEditorLoaded) {
       final current = state as NoteEditorLoaded;
       final newFav = current.note.favoritedAt == null ? DateTime.now() : null;
@@ -200,6 +214,8 @@ class NoteEditorBloc extends Bloc<NoteEditorEvent, NoteEditorState> {
             emit(current.copyWith(note: saved, isDirty: false));
             return;
           }
+        } on ReadOnlyDataException {
+          return;
         } catch (e) {
           emit(NoteEditorError(e.toString()));
           return;

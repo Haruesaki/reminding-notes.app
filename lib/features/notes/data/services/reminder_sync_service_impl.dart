@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
+import '../../../../core/migration/data_access_mode.dart';
 import '../../../../core/utils/atomic_file_writer.dart';
 import '../../../explorer/data/datasources/local_storage_data_source.dart';
 import '../../../explorer/data/datasources/notes_index_manager.dart';
@@ -19,6 +20,7 @@ class ReminderSyncServiceImpl implements ReminderSyncService {
   final LocalStorageDataSource localDataSource;
   final TonesLocalDataSource tonesDataSource;
   final NotificationService notificationService;
+  final DataAccessMode? dataAccessMode;
   final DateTime Function() _nowProvider;
 
   ReminderSyncServiceImpl({
@@ -28,6 +30,7 @@ class ReminderSyncServiceImpl implements ReminderSyncService {
     required this.localDataSource,
     required this.tonesDataSource,
     required this.notificationService,
+    this.dataAccessMode,
     DateTime Function()? nowProvider,
   }) : _nowProvider = nowProvider ?? DateTime.now;
 
@@ -78,6 +81,7 @@ class ReminderSyncServiceImpl implements ReminderSyncService {
 
   @override
   Future<void> reconcileAllReminders({bool forceRescheduleAll = false}) async {
+    if (dataAccessMode?.hasMigrationError == true) return;
     final tzChanged = await _checkAndUpdateTimezone();
     final shouldForceAll = forceRescheduleAll || tzChanged;
 
@@ -205,8 +209,7 @@ class ReminderSyncServiceImpl implements ReminderSyncService {
 
     for (final task in listFile.tasks) {
       final prev = prevById[task.id];
-      if (prev != null &&
-          prev.deadline?.notificationToneId != task.deadline?.notificationToneId) {
+      if (prev != null && prev.deadline != task.deadline) {
         forceTaskIds.add(task.id);
       }
       if (task.done || task.deadline == null) continue;

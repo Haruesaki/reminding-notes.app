@@ -5,16 +5,19 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../data/datasources/tones_local_data_source.dart';
+import '../../../domain/services/reminder_sync_service.dart';
 import 'tones_event.dart';
 import 'tones_state.dart';
 
 class TonesBloc extends Bloc<TonesEvent, TonesState> {
   final TonesLocalDataSource dataSource;
+  final ReminderSyncService? reminderSyncService;
   final AudioPlayer _audioPlayer;
   StreamSubscription? _playerCompleteSub;
 
   TonesBloc({
     required this.dataSource,
+    this.reminderSyncService,
     AudioPlayer? audioPlayer,
   })  : _audioPlayer = audioPlayer ?? AudioPlayer(),
         super(const TonesState()) {
@@ -70,6 +73,7 @@ class TonesBloc extends Bloc<TonesEvent, TonesState> {
         await _audioPlayer.stop();
       }
       await dataSource.deleteTone(event.toneId);
+      await reminderSyncService?.syncAfterToneDeleted(event.toneId);
       final updated = state.tones.where((t) => t.id != event.toneId).toList();
       emit(state.copyWith(
         status: TonesStatus.loaded,

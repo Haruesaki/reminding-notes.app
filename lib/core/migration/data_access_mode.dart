@@ -34,6 +34,12 @@ class DataAccessMode extends ChangeNotifier {
   }
 
   void ensureWritable() {
+    if (_migrationError != null) {
+      throw ReadOnlyDataException(
+        'Migrasi data gagal. Penulisan dinonaktifkan untuk melindungi data.',
+        _newerSchemaVersion,
+      );
+    }
     if (_isReadOnly) {
       throw ReadOnlyDataException(
         'Data dibuat oleh versi aplikasi yang lebih baru. Mode baca saja.',

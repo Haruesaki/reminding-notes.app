@@ -6,6 +6,7 @@ import 'package:flutter_quill/flutter_quill.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/read_only_mode_banner.dart';
 import '../../../explorer/domain/entities/entities.dart';
 import '../bloc/note_editor/note_editor_bloc.dart';
 import '../bloc/note_editor/note_editor_event.dart';
@@ -278,8 +279,12 @@ class _NoteEditorViewState extends State<_NoteEditorView>
             backgroundColor: Colors.white,
             resizeToAvoidBottomInset: true,
             body: SafeArea(
-              child: Stack(
+              child: Column(
                 children: [
+                  const ReadOnlyModeBanner(),
+                  Expanded(
+                    child: Stack(
+                      children: [
                   // Main Scrollable Area
                   Positioned.fill(
                     child: Align(
@@ -462,6 +467,9 @@ class _NoteEditorViewState extends State<_NoteEditorView>
                       child: FormattingToolbar(
                         controller: _quillController,
                       ),
+                    ),
+                  ),
+                      ],
                     ),
                   ),
                 ],

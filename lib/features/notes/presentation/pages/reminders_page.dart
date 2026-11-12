@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/read_only_mode_banner.dart';
 import '../../../explorer/domain/entities/entities.dart';
 import '../../domain/services/reminder_calculator.dart';
 import '../cubit/deadline_calendar_cubit.dart';
@@ -82,7 +83,11 @@ class _RemindersPageState extends State<RemindersPage> {
           ),
         ),
       ),
-      body: BlocBuilder<DeadlineCalendarCubit, DeadlineCalendarState>(
+      body: Column(
+        children: [
+          const ReadOnlyModeBanner(),
+          Expanded(
+            child: BlocBuilder<DeadlineCalendarCubit, DeadlineCalendarState>(
         builder: (context, state) {
           if (state.isLoading) {
             return const Center(
@@ -201,6 +206,9 @@ class _RemindersPageState extends State<RemindersPage> {
             },
           );
         },
+      ),
+          ),
+        ],
       ),
     );
   }

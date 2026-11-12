@@ -65,12 +65,18 @@ class ExplorerRepositoryImpl implements ExplorerRepository {
 
   @override
   Future<ListFile> saveList(ListFile listFile, {String? targetFolderRelativePath}) async {
+    ListFile? previousList;
+    if (reminderSyncService != null && listFile.relativePath.isNotEmpty) {
+      try {
+        previousList = await localDataSource.readList(listFile.relativePath);
+      } catch (_) {}
+    }
     final saved = await localDataSource.writeList(
       listFile,
       targetFolderRelativePath: targetFolderRelativePath,
     );
     if (reminderSyncService != null) {
-      await reminderSyncService!.syncListFile(saved);
+      await reminderSyncService!.syncListFile(saved, previousList: previousList);
     }
     return saved;
   }

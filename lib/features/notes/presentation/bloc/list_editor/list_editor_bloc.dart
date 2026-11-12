@@ -1,17 +1,26 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:uuid/uuid.dart';
+import '../../../../../core/error/failures.dart';
+import '../../../../../core/migration/data_access_mode.dart';
 import '../../../../explorer/domain/entities/entities.dart';
 import '../../../../explorer/domain/repositories/explorer_repository.dart';
+import '../../../domain/services/reminder_sync_service.dart';
 import 'list_editor_event.dart';
 import 'list_editor_state.dart';
 
 class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
   final ExplorerRepository repository;
+  final ReminderSyncService? reminderSyncService;
+  final DataAccessMode? dataAccessMode;
   final Uuid _uuid = const Uuid();
   String _folderRelativePath = '';
 
-  ListEditorBloc({required this.repository}) : super(ListEditorInitial()) {
+  ListEditorBloc({
+    required this.repository,
+    this.reminderSyncService,
+    this.dataAccessMode,
+  }) : super(ListEditorInitial()) {
     on<InitializeList>(_onInitializeList);
     on<UpdateListTitle>(_onUpdateTitle);
     on<ToggleListTaskDone>(_onToggleTaskDone);
@@ -112,20 +121,29 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
   ) {
     if (state is! ListEditorLoaded) return;
     final current = state as ListEditorLoaded;
+    Task? toggledTask;
     final updatedTasks = current.listFile.tasks.map((task) {
       if (task.id == event.taskId) {
         final newDone = !task.done;
         final newSubtasks =
             task.subtasks.map((st) => st.copyWith(done: newDone)).toList();
-        return task.copyWith(done: newDone, subtasks: newSubtasks);
+        toggledTask = task.copyWith(done: newDone, subtasks: newSubtasks);
+        return toggledTask!;
       }
       return task;
     }).toList();
 
+    final updatedList = current.listFile.copyWith(tasks: updatedTasks);
     emit(current.copyWith(
-      listFile: current.listFile.copyWith(tasks: updatedTasks),
+      listFile: updatedList,
       isDirty: true,
     ));
+
+    if (toggledTask != null &&
+        !(dataAccessMode?.isReadOnly ?? false) &&
+        reminderSyncService != null) {
+      unawaited(_syncDoneTransition(updatedList, toggledTask!));
+    }
   }
 
   void _onToggleSubtaskDone(
@@ -134,8 +152,11 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
   ) {
     if (state is! ListEditorLoaded) return;
     final current = state as ListEditorLoaded;
+    Task? parentBefore;
+    Task? parentAfter;
     final updatedTasks = current.listFile.tasks.map((task) {
       if (task.id == event.taskId) {
+        parentBefore = task;
         final newSubtasks = task.subtasks.map((st) {
           if (st.id == event.subtaskId) {
             return st.copyWith(done: !st.done);
@@ -148,15 +169,25 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
         // Hilangkan centang satu sub task -> induk tidak tercentang.
         final allDone =
             newSubtasks.isNotEmpty && newSubtasks.every((st) => st.done);
-        return task.copyWith(done: allDone, subtasks: newSubtasks);
+        parentAfter = task.copyWith(done: allDone, subtasks: newSubtasks);
+        return parentAfter!;
       }
       return task;
     }).toList();
 
+    final updatedList = current.listFile.copyWith(tasks: updatedTasks);
     emit(current.copyWith(
-      listFile: current.listFile.copyWith(tasks: updatedTasks),
+      listFile: updatedList,
       isDirty: true,
     ));
+
+    if (parentBefore != null &&
+        parentAfter != null &&
+        parentBefore!.done != parentAfter!.done &&
+        !(dataAccessMode?.isReadOnly ?? false) &&
+        reminderSyncService != null) {
+      unawaited(_syncDoneTransition(updatedList, parentAfter!));
+    }
   }
 
   void _onAddTask(
@@ -205,23 +236,36 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
       done: false,
     );
 
+    Task? parentBefore;
+    Task? parentAfter;
     final updatedTasks = current.listFile.tasks.map((task) {
       if (task.id == event.parentTaskId) {
+        parentBefore = task;
         final newSubtasks = List<Subtask>.from(task.subtasks)..add(newSubtask);
         final allDone = newSubtasks.every((st) => st.done);
-        return task.copyWith(
+        parentAfter = task.copyWith(
           collapsed: false,
           done: allDone,
           subtasks: newSubtasks,
         );
+        return parentAfter!;
       }
       return task;
     }).toList();
 
+    final updatedList = current.listFile.copyWith(tasks: updatedTasks);
     emit(current.copyWith(
-      listFile: current.listFile.copyWith(tasks: updatedTasks),
+      listFile: updatedList,
       isDirty: true,
     ));
+
+    if (parentBefore != null &&
+        parentAfter != null &&
+        parentBefore!.done != parentAfter!.done &&
+        !(dataAccessMode?.isReadOnly ?? false) &&
+        reminderSyncService != null) {
+      unawaited(_syncDoneTransition(updatedList, parentAfter!));
+    }
   }
 
   void _onUpdateTaskText(
@@ -281,6 +325,10 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
       listFile: current.listFile.copyWith(tasks: updatedTasks),
       isDirty: true,
     ));
+
+    if (!(dataAccessMode?.isReadOnly ?? false) && reminderSyncService != null) {
+      unawaited(reminderSyncService!.cancelTaskReminders(event.taskId));
+    }
   }
 
   void _onDeleteSubtask(
@@ -289,24 +337,37 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
   ) {
     if (state is! ListEditorLoaded) return;
     final current = state as ListEditorLoaded;
+    Task? parentBefore;
+    Task? parentAfter;
     final updatedTasks = current.listFile.tasks.map((task) {
       if (task.id == event.taskId) {
+        parentBefore = task;
         final newSubtasks =
             task.subtasks.where((st) => st.id != event.subtaskId).toList();
         final allDone =
             newSubtasks.isNotEmpty && newSubtasks.every((st) => st.done);
-        return task.copyWith(
+        parentAfter = task.copyWith(
           done: newSubtasks.isEmpty ? task.done : allDone,
           subtasks: newSubtasks,
         );
+        return parentAfter!;
       }
       return task;
     }).toList();
 
+    final updatedList = current.listFile.copyWith(tasks: updatedTasks);
     emit(current.copyWith(
-      listFile: current.listFile.copyWith(tasks: updatedTasks),
+      listFile: updatedList,
       isDirty: true,
     ));
+
+    if (parentBefore != null &&
+        parentAfter != null &&
+        parentBefore!.done != parentAfter!.done &&
+        !(dataAccessMode?.isReadOnly ?? false) &&
+        reminderSyncService != null) {
+      unawaited(_syncDoneTransition(updatedList, parentAfter!));
+    }
   }
 
   void _onRestoreTask(
@@ -319,10 +380,22 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
     final insertIdx = event.index.clamp(0, newTasks.length);
     newTasks.insert(insertIdx, event.task);
 
+    final updatedList = current.listFile.copyWith(tasks: newTasks);
     emit(current.copyWith(
-      listFile: current.listFile.copyWith(tasks: newTasks),
+      listFile: updatedList,
       isDirty: true,
     ));
+
+    if (!(dataAccessMode?.isReadOnly ?? false) &&
+        reminderSyncService != null &&
+        !event.task.done &&
+        event.task.deadline != null) {
+      unawaited(reminderSyncService!.syncTaskReminder(
+        task: event.task,
+        fileId: updatedList.id,
+        fileTitle: updatedList.title,
+      ));
+    }
   }
 
   void _onUpdateTaskSettings(
@@ -331,17 +404,24 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
   ) {
     if (state is! ListEditorLoaded) return;
     final current = state as ListEditorLoaded;
+    Task? prevTask;
     final updatedTasks = current.listFile.tasks.map((task) {
       if (task.id == event.updatedTask.id) {
+        prevTask = task;
         return event.updatedTask;
       }
       return task;
     }).toList();
 
+    final updatedList = current.listFile.copyWith(tasks: updatedTasks);
     emit(current.copyWith(
-      listFile: current.listFile.copyWith(tasks: updatedTasks),
+      listFile: updatedList,
       isDirty: true,
     ));
+
+    if (!(dataAccessMode?.isReadOnly ?? false) && reminderSyncService != null) {
+      unawaited(_syncUpdatedTask(updatedList, prevTask, event.updatedTask));
+    }
   }
 
   void _onToggleTaskCollapse(
@@ -367,6 +447,7 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
     Emitter<ListEditorState> emit,
   ) async {
     if (state is! ListEditorLoaded) return;
+    if (dataAccessMode?.isReadOnly == true) return;
     final current = state as ListEditorLoaded;
     final isFav = current.listFile.isFavorite;
     final updated = current.listFile.copyWith(
@@ -382,6 +463,10 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
     Emitter<ListEditorState> emit,
   ) async {
     if (state is! ListEditorLoaded) return;
+    if (dataAccessMode?.isReadOnly == true) {
+      emit((state as ListEditorLoaded).copyWith(isDirty: false));
+      return;
+    }
     final current = state as ListEditorLoaded;
     final file = current.listFile;
 
@@ -418,6 +503,10 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
           isDirty: false,
         ));
       }
+    } on ReadOnlyDataException {
+      if (state is ListEditorLoaded) {
+        emit((state as ListEditorLoaded).copyWith(isDirty: false));
+      }
     } catch (e) {
       // Keep state
     }
@@ -428,11 +517,51 @@ class ListEditorBloc extends Bloc<ListEditorEvent, ListEditorState> {
     Emitter<ListEditorState> emit,
   ) async {
     if (state is! ListEditorLoaded) return;
+    if (dataAccessMode?.isReadOnly == true) return;
     final current = state as ListEditorLoaded;
     if (current.isNew && current.listFile.relativePath.isNotEmpty) {
       try {
         await repository.deleteEntry(current.listFile);
       } catch (_) {}
+    } else if (current.isNew && reminderSyncService != null) {
+      try {
+        await reminderSyncService!.cancelListFileReminders(current.listFile);
+      } catch (_) {}
     }
+  }
+
+  Future<void> _syncDoneTransition(ListFile listFile, Task task) async {
+    try {
+      if (task.done || task.deadline == null) {
+        await reminderSyncService!.cancelTaskReminders(task.id);
+      } else {
+        await reminderSyncService!.syncTaskReminder(
+          task: task,
+          fileId: listFile.id,
+          fileTitle: listFile.title,
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _syncUpdatedTask(
+    ListFile listFile,
+    Task? previousTask,
+    Task updatedTask,
+  ) async {
+    try {
+      if (updatedTask.done || updatedTask.deadline == null) {
+        await reminderSyncService!.cancelTaskReminders(updatedTask.id);
+        return;
+      }
+      if (previousTask?.deadline != updatedTask.deadline) {
+        await reminderSyncService!.cancelTaskReminders(updatedTask.id);
+      }
+      await reminderSyncService!.syncTaskReminder(
+        task: updatedTask,
+        fileId: listFile.id,
+        fileTitle: listFile.title,
+      );
+    } catch (_) {}
   }
 }

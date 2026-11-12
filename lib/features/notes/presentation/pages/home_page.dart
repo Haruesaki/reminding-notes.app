@@ -6,6 +6,7 @@ import '../../../../core/di/injection_container.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/utils/name_sanitizer.dart';
+import '../../../../core/widgets/read_only_mode_banner.dart';
 import '../../../explorer/domain/entities/entities.dart';
 import '../bloc/note_list/note_list_bloc.dart';
 import '../bloc/note_list/note_list_event.dart';
@@ -508,6 +509,9 @@ class HomePage extends StatelessWidget {
                           parent: BouncingScrollPhysics(),
                         ),
                         slivers: [
+                          const SliverToBoxAdapter(
+                            child: ReadOnlyModeBanner(),
+                          ),
                           SliverPadding(
                             padding: const EdgeInsets.symmetric(
                               horizontal: AppConstants.screenMargin,

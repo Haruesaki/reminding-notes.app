@@ -6,14 +6,13 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
 
 import '../../../../core/di/injection_container.dart';
+import '../../../../core/error/failures.dart';
 import '../../../../core/migration/migration_runner.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../../core/widgets/read_only_mode_banner.dart';
 import '../../../backup/data/services/backup_service.dart';
 import '../../../backup/domain/models/backup_exceptions.dart';
-import '../../../explorer/data/datasources/notes_index_manager.dart';
-import '../../../notes/data/datasources/tones_local_data_source.dart';
-import '../../../notes/data/services/notification_service.dart';
 import '../../../notes/presentation/bloc/note_list/note_list_bloc.dart';
 import '../../../notes/presentation/bloc/note_list/note_list_event.dart';
 
@@ -164,15 +163,6 @@ class _SettingsPageState extends State<SettingsPage> {
         );
       }
 
-      // Bangun ulang indeks, daftarkan nada, dan jadwalkan ulang notifikasi (PRD 7.11)
-      await sl<NotesIndexManager>().rebuildIndex(notesDir);
-      await sl<TonesLocalDataSource>().reRegisterAllTones();
-      await BackupService.rescheduleAllReminders(
-        notesDir: notesDir,
-        tonesDataSource: sl<TonesLocalDataSource>(),
-        notificationService: sl<NotificationService>(),
-      );
-
       // Bersihkan folder ekstraksi sementara
       if (tempExtractDir.existsSync()) {
         try {
@@ -214,6 +204,10 @@ class _SettingsPageState extends State<SettingsPage> {
         'Proses impor dibatalkan karena terdapat file rusak atau checksum tidak cocok:\n\n'
             '${e.corruptedFiles.map((f) => '• $f').join('\n')}',
       );
+    } on ReadOnlyDataException catch (e) {
+      _hideLoading();
+      if (!mounted) return;
+      _showErrorDialog('Mode Baca Saja', e.message);
     } on InvalidBackupException catch (e) {
       _hideLoading();
       if (!mounted) return;
@@ -411,9 +405,13 @@ class _SettingsPageState extends State<SettingsPage> {
         title: const Text('Pengaturan', style: AppTypography.heading2),
         centerTitle: false,
       ),
-      body: Stack(
+      body: Column(
         children: [
-          ListView(
+          const ReadOnlyModeBanner(),
+          Expanded(
+            child: Stack(
+              children: [
+                ListView(
             padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
             children: [
               // Accordion Backup
@@ -568,6 +566,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
             ),
+              ],
+            ),
+          ),
         ],
       ),
     );

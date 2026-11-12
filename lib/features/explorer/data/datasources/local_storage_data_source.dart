@@ -291,7 +291,19 @@ class LocalStorageDataSource {
     await _ensureInOrder(folderRel, model.id);
 
     if (indexManager != null) {
-      await indexManager!.rebuildIndex(rootDir);
+      final plainText = model.type == 'list'
+          ? (model as ListFileModel).tasks.map((t) => t.text).join(' • ')
+          : model.plainText;
+      await indexManager!.upsertEntry(IndexFileEntry(
+        id: model.id,
+        relativePath: newRelPath,
+        type: model.type,
+        title: model.title,
+        plainText: plainText,
+        favoritedAt: model.favoritedAt,
+        updatedAt: model.updatedAt,
+        colorIndex: model.colorIndex,
+      ));
     }
 
     return model;
@@ -364,7 +376,17 @@ class LocalStorageDataSource {
     await _ensureInOrder(folderRel, model.id);
 
     if (indexManager != null) {
-      await indexManager!.rebuildIndex(rootDir);
+      final plainText = model.tasks.map((t) => t.text).join(' • ');
+      await indexManager!.upsertEntry(IndexFileEntry(
+        id: model.id,
+        relativePath: newRelPath,
+        type: model.type,
+        title: model.title,
+        plainText: plainText,
+        favoritedAt: model.favoritedAt,
+        updatedAt: model.updatedAt,
+        colorIndex: model.colorIndex,
+      ));
     }
 
     return model;

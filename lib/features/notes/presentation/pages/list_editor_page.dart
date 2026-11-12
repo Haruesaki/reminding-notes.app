@@ -5,10 +5,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/widgets/read_only_mode_banner.dart';
 import '../../../explorer/domain/entities/entities.dart';
 import '../../data/datasources/tones_local_data_source.dart';
 import '../../data/services/alarm_service.dart';
-import '../../data/services/notification_service.dart';
 import '../../data/services/permission_service.dart';
 import '../../domain/services/reminder_calculator.dart';
 import '../bloc/list_editor/list_editor_bloc.dart';
@@ -249,9 +249,6 @@ class _ListEditorViewState extends State<_ListEditorView>
     final bloc = context.read<ListEditorBloc>();
     bloc.add(DeleteListTask(task.id));
     _scheduleAutoSave();
-    if (task.deadline != null) {
-      sl<NotificationService>().cancelTaskReminders(task.id);
-    }
 
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -265,9 +262,6 @@ class _ListEditorViewState extends State<_ListEditorView>
           onPressed: () {
             bloc.add(RestoreListTask(index: index, task: task));
             _scheduleAutoSave();
-            if (task.deadline != null) {
-              _scheduleReminderIfPresent(task);
-            }
           },
         ),
       ),
@@ -351,9 +345,13 @@ class _ListEditorViewState extends State<_ListEditorView>
             backgroundColor: Colors.white,
             resizeToAvoidBottomInset: true,
             body: SafeArea(
-              child: Stack(
+              child: Column(
                 children: [
-                  // Main Scrollable Area
+                  const ReadOnlyModeBanner(),
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        // Main Scrollable Area
                   Positioned.fill(
                     child: Align(
                       alignment: Alignment.topCenter,
@@ -558,6 +556,9 @@ class _ListEditorViewState extends State<_ListEditorView>
                       ],
                     ),
                   ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -617,14 +618,6 @@ class _ListEditorViewState extends State<_ListEditorView>
                         onChanged: (val) {
                           bloc.add(ToggleListTaskDone(task.id));
                           _scheduleAutoSave();
-                          if (task.deadline != null) {
-                            if (!task.done) {
-                              sl<NotificationService>().cancelTaskReminders(task.id);
-                            } else {
-                              final updatedTask = task.copyWith(done: false);
-                              _scheduleReminderIfPresent(updatedTask);
-                            }
-                          }
                         },
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(5),
@@ -1013,26 +1006,6 @@ class _ListEditorViewState extends State<_ListEditorView>
     );
   }
 
-  Future<void> _scheduleReminderIfPresent(Task task) async {
-    final bloc = context.read<ListEditorBloc>();
-    final state = bloc.state;
-    if (state is! ListEditorLoaded) return;
-    if (task.deadline == null) return;
-
-    ToneRef? tone;
-    final toneId = task.deadline?.notificationToneId;
-    if (toneId != null) {
-      tone = await sl<TonesLocalDataSource>().getToneById(toneId);
-    }
-
-    await sl<NotificationService>().scheduleTaskReminders(
-      task: task,
-      fileTitle: state.listFile.title,
-      fileId: state.listFile.id,
-      tone: tone,
-    );
-  }
-
   Future<void> _openTaskSettings(Task task) async {
     final bloc = context.read<ListEditorBloc>();
     final result = await TaskSettingsDialog.show(context, task: task);
@@ -1051,12 +1024,6 @@ class _ListEditorViewState extends State<_ListEditorView>
           ),
         );
       }
-    }
-
-    if (result.task.deadline != null) {
-      await _scheduleReminderIfPresent(result.task);
-    } else if (result.deadlineModified) {
-      await sl<NotificationService>().cancelTaskReminders(result.task.id);
     }
 
     if (result.alarmModified &&

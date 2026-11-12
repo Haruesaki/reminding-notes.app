@@ -67,6 +67,28 @@ class IndexFileEntry extends Equatable {
         updatedAt,
         colorIndex,
       ];
+
+  IndexFileEntry copyWith({
+    String? id,
+    String? relativePath,
+    String? type,
+    String? title,
+    String? plainText,
+    DateTime? favoritedAt,
+    DateTime? updatedAt,
+    int? colorIndex,
+  }) {
+    return IndexFileEntry(
+      id: id ?? this.id,
+      relativePath: relativePath ?? this.relativePath,
+      type: type ?? this.type,
+      title: title ?? this.title,
+      plainText: plainText ?? this.plainText,
+      favoritedAt: favoritedAt ?? this.favoritedAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      colorIndex: colorIndex ?? this.colorIndex,
+    );
+  }
 }
 
 class IndexDeadlineEntry extends Equatable {
@@ -156,6 +178,10 @@ class NotesIndexManager {
 
   File get indexFile => File(p.join(supportDir.path, 'index.json'));
 
+  // --- In-memory index cache ---
+  AppIndexData? _cache;
+  bool _cacheLoaded = false;
+
   void _inspectSchemaVersion(Map<String, dynamic> map) {
     final version = (map['schemaVersion'] as num?)?.toInt() ?? 1;
     if (version > MigrationRunner.currentSchemaVersion) {
@@ -163,15 +189,21 @@ class NotesIndexManager {
     }
   }
 
+  /// Muat indeks dari cache memori; bila belum ada, baca dari disk sekali.
   Future<AppIndexData> loadIndex() async {
     if (dataAccessMode?.hasMigrationError == true) {
       return const AppIndexData();
+    }
+    if (_cacheLoaded && _cache != null) {
+      return _cache!;
     }
     final file = indexFile;
     if (dataAccessMode?.isReadOnly != true) {
       await AtomicFileWriter.recoverTargetOrphans(file);
     }
     if (!await file.exists()) {
+      _cache = const AppIndexData();
+      _cacheLoaded = true;
       return const AppIndexData();
     }
     try {
@@ -179,11 +211,17 @@ class NotesIndexManager {
       final jsonMap = json.decode(content) as Map<String, dynamic>;
       final data = AppIndexData.fromMap(jsonMap);
       if (data.version != AppIndexData.currentVersion) {
+        _cache = const AppIndexData();
+        _cacheLoaded = true;
         return const AppIndexData();
       }
+      _cache = data;
+      _cacheLoaded = true;
       return data;
     } catch (_) {
       // Jika corrupt atau rusak, kembalikan kosong agar dibangun ulang
+      _cache = const AppIndexData();
+      _cacheLoaded = true;
       return const AppIndexData();
     }
   }
@@ -191,6 +229,144 @@ class NotesIndexManager {
   Future<void> saveIndex(AppIndexData data) async {
     dataAccessMode?.ensureWritable();
     await AtomicFileWriter.writeJson(indexFile, data.toMap());
+    _cache = data;
+    _cacheLoaded = true;
+  }
+
+  /// Tulis indeks ke disk secara atomik. Penulisan diserialisasi oleh
+  /// [AtomicFileWriter], jadi tidak perlu antrean tambahan di sini.
+  Future<void> _persistIndex(AppIndexData data) async {
+    await saveIndex(data);
+  }
+
+  /// Tulis ulang indeks terakhir yang ada di cache ke disk.
+  Future<void> flushPendingWrites() async {
+    if (_cache != null) {
+      await saveIndex(_cache!);
+    }
+  }
+
+  /// Upsert satu entri berkas ke indeks (create atau update).
+  Future<void> upsertEntry(IndexFileEntry entry) async {
+    await loadIndex();
+    final data = _cache!;
+    final idx = data.files.indexWhere((f) => f.id == entry.id);
+    final updatedFiles = List<IndexFileEntry>.from(data.files);
+    if (idx >= 0) {
+      updatedFiles[idx] = entry;
+    } else {
+      updatedFiles.add(entry);
+    }
+    final newData = AppIndexData(
+      version: AppIndexData.currentVersion,
+      files: updatedFiles,
+      deadlines: data.deadlines,
+    );
+    _cache = newData;
+    _cacheLoaded = true;
+    await _persistIndex(newData);
+  }
+
+  /// Hapus satu entri dari indeks berdasarkan relativePath.
+  Future<void> removeEntry(String relativePath) async {
+    await loadIndex();
+    final data = _cache!;
+    final updatedFiles = data.files.where((f) => f.relativePath != relativePath).toList();
+    final updatedDeadlines = data.deadlines.where((d) {
+      final file = updatedFiles.firstWhere((f) => f.id == d.fileId, orElse: () => IndexFileEntry(
+        id: '',
+        relativePath: '',
+        type: 'page',
+        title: '',
+        plainText: '',
+        favoritedAt: null,
+        updatedAt: DateTime.now(),
+        colorIndex: 0,
+      ));
+      return file.id.isNotEmpty;
+    }).toList();
+    final newData = AppIndexData(
+      version: AppIndexData.currentVersion,
+      files: updatedFiles,
+      deadlines: updatedDeadlines,
+    );
+    _cache = newData;
+    _cacheLoaded = true;
+    await _persistIndex(newData);
+  }
+
+  /// Hapus semua entri di bawah folder (subtree).
+  Future<void> removeSubtree(String folderRelativePath) async {
+    await loadIndex();
+    final data = _cache!;
+    final normFolder = folderRelativePath.replaceAll(r'\', '/');
+    final removedIds = <String>{};
+    final updatedFiles = data.files.where((f) {
+      final rel = f.relativePath.replaceAll(r'\', '/');
+      final isInside = rel == normFolder ||
+          rel.startsWith('$normFolder/');
+      if (isInside) removedIds.add(f.id);
+      return !isInside;
+    }).toList();
+    final updatedDeadlines = data.deadlines.where((d) => !removedIds.contains(d.fileId)).toList();
+    final newData = AppIndexData(
+      version: AppIndexData.currentVersion,
+      files: updatedFiles,
+      deadlines: updatedDeadlines,
+    );
+    _cache = newData;
+    _cacheLoaded = true;
+    await _persistIndex(newData);
+  }
+
+  /// Pindahkan satu entri dari path lama ke path baru di indeks.
+  Future<void> moveEntry(String oldRelativePath, String newRelativePath) async {
+    await loadIndex();
+    final data = _cache!;
+    final normOld = oldRelativePath.replaceAll(r'\', '/');
+    final normNew = newRelativePath.replaceAll(r'\', '/');
+    final updatedFiles = data.files.map((f) {
+      final rel = f.relativePath.replaceAll(r'\', '/');
+      if (rel == normOld) {
+        return f.copyWith(relativePath: normNew);
+      }
+      return f;
+    }).toList();
+    final newData = AppIndexData(
+      version: AppIndexData.currentVersion,
+      files: updatedFiles,
+      deadlines: data.deadlines,
+    );
+    _cache = newData;
+    _cacheLoaded = true;
+    await _persistIndex(newData);
+  }
+
+  /// Pindahkan seluruh subtree folder dari path lama ke path baru.
+  Future<void> moveSubtree(String oldFolderRelativePath, String newFolderRelativePath) async {
+    await loadIndex();
+    final data = _cache!;
+    final normOld = oldFolderRelativePath.replaceAll(r'\', '/');
+    final normNew = newFolderRelativePath.replaceAll(r'\', '/');
+    final prefix = '$normOld/';
+    final updatedFiles = data.files.map((f) {
+      final rel = f.relativePath.replaceAll(r'\', '/');
+      if (rel == normOld) {
+        return f.copyWith(relativePath: normNew);
+      }
+      if (rel.startsWith(prefix)) {
+        return f.copyWith(relativePath: '$normNew${rel.substring(normOld.length)}');
+      }
+      return f;
+    }).toList();
+    final newData = AppIndexData(
+      version: AppIndexData.currentVersion,
+      files: updatedFiles,
+      deadlines: data.deadlines,
+    );
+    _cache = newData;
+    _cacheLoaded = true;
+    await _persistIndex(newData);
   }
 
   /// Membangun ulang indeks dari pohon direktori notes_data secara lengkap
@@ -206,6 +382,8 @@ class NotesIndexManager {
       if (dataAccessMode?.isReadOnly != true) {
         await saveIndex(empty);
       }
+      _cache = empty;
+      _cacheLoaded = true;
       return empty;
     }
 
@@ -307,6 +485,9 @@ class NotesIndexManager {
     if (dataAccessMode?.isReadOnly != true) {
       await saveIndex(newIndex);
     }
+    _cache = newIndex;
+    _cacheLoaded = true;
     return newIndex;
   }
+
 }

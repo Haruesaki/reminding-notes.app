@@ -11,10 +11,7 @@ import '../../../../core/migration/data_access_mode.dart';
 import '../../../../core/migration/migration_runner.dart';
 import '../../../../core/utils/name_sanitizer.dart';
 import '../../../explorer/data/datasources/notes_index_manager.dart';
-import '../../../explorer/data/models/list_file_model.dart';
-import '../../../explorer/domain/entities/list_file.dart';
 import '../../../notes/data/datasources/tones_local_data_source.dart';
-import '../../../notes/data/services/notification_service.dart';
 import '../../../notes/domain/services/reminder_sync_service.dart';
 import '../../domain/models/backup_exceptions.dart';
 import '../../domain/models/backup_manifest.dart';
@@ -630,35 +627,6 @@ class BackupService {
         entity.copySync(p.join(dst.path, name));
       }
     }
-  }
-
-  /// Menjadwalkan ulang semua notifikasi deadline setelah proses impor (PRD 7.11)
-  static Future<void> rescheduleAllReminders({
-    required Directory notesDir,
-    required TonesLocalDataSource tonesDataSource,
-    required NotificationService notificationService,
-  }) async {
-    final listFiles = <ListFile>[];
-    if (notesDir.existsSync()) {
-      for (final entity in notesDir.listSync(recursive: true, followLinks: false)) {
-        if (entity is File && entity.path.endsWith('.json') && !p.basename(entity.path).startsWith('_')) {
-          try {
-            final content = jsonDecode(entity.readAsStringSync(encoding: utf8)) as Map<String, dynamic>;
-            if (content['type'] == 'list') {
-              final relPath = p.relative(entity.path, from: notesDir.path).replaceAll(r'\', '/');
-              listFiles.add(ListFileModel.fromJson(content, relativePath: relPath));
-            }
-          } catch (_) {}
-        }
-      }
-    }
-
-    final tones = await tonesDataSource.getTones();
-    final tonesMap = {for (final t in tones) t.id: t};
-    await notificationService.reconcileAllReminders(
-      listFiles: listFiles,
-      tonesMap: tonesMap,
-    );
   }
 }
 

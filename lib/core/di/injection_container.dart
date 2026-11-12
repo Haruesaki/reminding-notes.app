@@ -3,6 +3,8 @@ import 'package:get_it/get_it.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../migration/data_access_mode.dart';
+import '../migration/migration_runner.dart';
 import '../../features/backup/data/services/backup_service.dart';
 import '../../features/explorer/data/datasources/local_storage_data_source.dart';
 import '../../features/explorer/data/datasources/notes_index_manager.dart';
@@ -12,8 +14,11 @@ import '../../features/explorer/domain/usecases/explorer_usecases.dart';
 import '../../features/notes/data/datasources/tones_local_data_source.dart';
 import '../../features/notes/data/services/alarm_service.dart';
 import '../../features/notes/data/services/media_store_service.dart';
+import '../../features/notes/data/services/notification_plugin_client.dart';
 import '../../features/notes/data/services/notification_service.dart';
 import '../../features/notes/data/services/permission_service.dart';
+import '../../features/notes/data/services/reminder_sync_service_impl.dart';
+import '../../features/notes/domain/services/reminder_sync_service.dart';
 import '../../features/notes/presentation/bloc/list_editor/list_editor_bloc.dart';
 import '../../features/notes/presentation/bloc/note_editor/note_editor_bloc.dart';
 import '../../features/notes/presentation/bloc/note_list/note_list_bloc.dart';
@@ -26,6 +31,10 @@ final sl = GetIt.instance;
 Future<void> initDependencies({
   Directory? overrideNotesDir,
   Directory? overrideSupportDir,
+  MigrationRunner? migrationRunner,
+  NotificationPluginClient? notificationPluginClient,
+  Future<String> Function()? timezoneProvider,
+  bool reconcileOnStart = true,
 }) async {
   await sl.reset();
 
@@ -45,11 +54,37 @@ Future<void> initDependencies({
     assetsDir = Directory(p.join(docs.path, 'notes_assets'));
   }
 
+  final dataAccessMode = DataAccessMode();
+  final runner = migrationRunner ?? MigrationRunner();
+  final tonesFile = File(p.join(assetsDir.path, 'tones.json'));
+
+  try {
+    final migrationResult = await runner.migrateStartup(
+      notesDir: notesDir,
+      tonesFile: tonesFile,
+    );
+    if (migrationResult.hasNewerSchemaVersion) {
+      dataAccessMode.markReadOnly(
+        detectedVersion: migrationResult.maxDetectedVersion,
+      );
+    }
+  } catch (e) {
+    dataAccessMode.setMigrationError(
+      e is MigrationFailedException
+          ? (e.cause != null ? '${e.message}: ${e.cause}' : e.message)
+          : e.toString(),
+    );
+  }
+
   // Data Sources
-  final indexManager = NotesIndexManager(supportDir: supportDir);
+  final indexManager = NotesIndexManager(
+    supportDir: supportDir,
+    dataAccessMode: dataAccessMode,
+  );
   final localDataSource = LocalStorageDataSource(
     rootDir: notesDir,
     indexManager: indexManager,
+    dataAccessMode: dataAccessMode,
   );
   await localDataSource.init();
 
@@ -58,26 +93,53 @@ Future<void> initDependencies({
     assetsDir: assetsDir,
     notesDir: notesDir,
     mediaStoreService: mediaStoreService,
+    dataAccessMode: dataAccessMode,
   );
   await tonesDataSource.init();
 
-  final notificationService = NotificationService();
+  final notificationService = NotificationService(
+    pluginClient: notificationPluginClient,
+    timezoneProvider: timezoneProvider,
+  );
   await notificationService.init();
 
+  final reminderSyncService = ReminderSyncServiceImpl(
+    notesDir: notesDir,
+    supportDir: supportDir,
+    indexManager: indexManager,
+    localDataSource: localDataSource,
+    tonesDataSource: tonesDataSource,
+    notificationService: notificationService,
+    dataAccessMode: dataAccessMode,
+  );
+
+  sl.registerSingleton<DataAccessMode>(dataAccessMode);
   sl.registerSingleton<NotesIndexManager>(indexManager);
   sl.registerSingleton<LocalStorageDataSource>(localDataSource);
   sl.registerSingleton<MediaStoreService>(mediaStoreService);
   sl.registerSingleton<TonesLocalDataSource>(tonesDataSource);
   sl.registerSingleton<NotificationService>(notificationService);
+  sl.registerSingleton<ReminderSyncService>(reminderSyncService);
   sl.registerLazySingleton<AlarmService>(() => AlarmService());
   sl.registerLazySingleton<PermissionService>(() => PermissionService());
-  sl.registerLazySingleton<BackupService>(() => BackupService());
+  sl.registerLazySingleton<BackupService>(
+    () => BackupService(
+      dataAccessMode: sl<DataAccessMode>(),
+      indexManager: sl<NotesIndexManager>(),
+      tonesDataSource: sl<TonesLocalDataSource>(),
+      reminderSyncService: sl<ReminderSyncService>(),
+    ),
+  );
   sl.registerSingleton<Directory>(notesDir, instanceName: 'notesDir');
   sl.registerSingleton<Directory>(assetsDir, instanceName: 'assetsDir');
+  sl.registerSingleton<Directory>(supportDir, instanceName: 'supportDir');
 
   // Repositories
   sl.registerLazySingleton<ExplorerRepository>(
-    () => ExplorerRepositoryImpl(localDataSource: sl<LocalStorageDataSource>()),
+    () => ExplorerRepositoryImpl(
+      localDataSource: sl<LocalStorageDataSource>(),
+      reminderSyncService: sl<ReminderSyncService>(),
+    ),
   );
 
   // Use cases
@@ -100,13 +162,23 @@ Future<void> initDependencies({
     () => NoteListBloc(repository: sl<ExplorerRepository>()),
   );
   sl.registerFactory<NoteEditorBloc>(
-    () => NoteEditorBloc(repository: sl<ExplorerRepository>()),
+    () => NoteEditorBloc(
+      repository: sl<ExplorerRepository>(),
+      dataAccessMode: sl<DataAccessMode>(),
+    ),
   );
   sl.registerFactory<ListEditorBloc>(
-    () => ListEditorBloc(repository: sl<ExplorerRepository>()),
+    () => ListEditorBloc(
+      repository: sl<ExplorerRepository>(),
+      reminderSyncService: sl<ReminderSyncService>(),
+      dataAccessMode: sl<DataAccessMode>(),
+    ),
   );
   sl.registerFactory<TonesBloc>(
-    () => TonesBloc(dataSource: sl<TonesLocalDataSource>()),
+    () => TonesBloc(
+      dataSource: sl<TonesLocalDataSource>(),
+      reminderSyncService: sl<ReminderSyncService>(),
+    ),
   );
   sl.registerFactory<DeadlineCalendarCubit>(
     () => DeadlineCalendarCubit(repository: sl<ExplorerRepository>()),
@@ -114,5 +186,9 @@ Future<void> initDependencies({
   sl.registerLazySingleton<CopyMoveCubit>(
     () => CopyMoveCubit(),
   );
+
+  if (reconcileOnStart && !dataAccessMode.hasMigrationError) {
+    await reminderSyncService.reconcileAllReminders();
+  }
 }
 
