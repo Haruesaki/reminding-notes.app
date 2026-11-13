@@ -10,6 +10,7 @@ import '../../../../core/constants/app_constants.dart';
 import '../../../../core/migration/data_access_mode.dart';
 import '../../../../core/migration/migration_runner.dart';
 import '../../../../core/utils/name_sanitizer.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../explorer/data/datasources/notes_index_manager.dart';
 import '../../../notes/data/datasources/tones_local_data_source.dart';
 import '../../../notes/domain/services/reminder_sync_service.dart';
@@ -32,6 +33,16 @@ class BackupParams {
     required this.appVersion,
     required this.schemaVersion,
     required this.backupFormat,
+  });
+}
+
+/// Parameter untuk inspeksi backup yang diproses di isolate via [compute].
+class _InspectBackupIsolateParams {
+  final List<int> zipBytes;
+  final String tempExtractDirPath;
+  const _InspectBackupIsolateParams({
+    required this.zipBytes,
+    required this.tempExtractDirPath,
   });
 }
 
@@ -154,118 +165,146 @@ class BackupService {
     return compute(createBackupBytes, params);
   }
 
-  /// Mengekstrak file ZIP backup ke tempExtractDir dan memvalidasi seluruh syarat integritas (PRD 7.11)
+  /// Dieksekusi di isolate: decode ZIP, ekstraksi, validasi zip slip/manifest/checksum/JSON, migrasi.
+  /// Mengembalikan Map serializable: {'manifest': <json map>, 'extractDirPath': <string>}.
+  static Future<Map<String, dynamic>> _inspectBackupIsolate(
+      _InspectBackupIsolateParams params) async {
+    final tempExtractDir = Directory(params.tempExtractDirPath);
+    bool success = false;
+    try {
+      if (tempExtractDir.existsSync()) {
+        tempExtractDir.deleteSync(recursive: true);
+      }
+      tempExtractDir.createSync(recursive: true);
+
+      final Archive archive;
+      try {
+        archive = ZipDecoder().decodeBytes(params.zipBytes);
+      } catch (_) {
+        throw InvalidBackupException('File ZIP rusak atau bukan format ZIP yang valid.');
+      }
+
+      // 1. Validasi Zip Slip (Path Berbahaya) & Ekstraksi
+      for (final file in archive) {
+        final name = file.name;
+        if (name.contains('..') ||
+            name.startsWith('/') ||
+            name.startsWith(r'\') ||
+            (name.length > 2 && name[1] == ':')) {
+          throw DangerousPathException(name);
+        }
+
+        final destPath = p.normalize(p.join(tempExtractDir.path, name));
+        if (!p.isWithin(tempExtractDir.path, destPath) && destPath != tempExtractDir.path) {
+          throw DangerousPathException(name);
+        }
+
+        if (file.isFile) {
+          final outFile = File(destPath);
+          outFile.parent.createSync(recursive: true);
+          outFile.writeAsBytesSync(file.content as List<int>);
+        } else {
+          Directory(destPath).createSync(recursive: true);
+        }
+      }
+
+      // 2. Validasi manifest.json
+      final manifestFile = File(p.join(tempExtractDir.path, 'manifest.json'));
+      if (!manifestFile.existsSync()) {
+        throw InvalidBackupException('manifest.json tidak ditemukan dalam file backup.');
+      }
+
+      final Map<String, dynamic> manifestMap;
+      try {
+        final text = manifestFile.readAsStringSync(encoding: utf8);
+        manifestMap = jsonDecode(text) as Map<String, dynamic>;
+      } catch (_) {
+        throw InvalidBackupException('manifest.json rusak dan tidak dapat di-parse.');
+      }
+
+      final fileSchemaVersion = manifestMap['schemaVersion'] as int? ?? 1;
+      if (fileSchemaVersion > AppConstants.schemaVersion) {
+        throw NewerSchemaVersionException(fileSchemaVersion, AppConstants.schemaVersion);
+      }
+
+      final manifest = BackupManifest.fromJson(manifestMap);
+
+      // 3. Validasi Checksum & Parse JSON
+      final corruptedFiles = <String>[];
+      for (final fileEntry in manifest.files) {
+        final fileOnDisk = File(p.join(tempExtractDir.path, fileEntry.path));
+        if (!fileOnDisk.existsSync()) {
+          corruptedFiles.add(fileEntry.path);
+          continue;
+        }
+
+        final bytes = fileOnDisk.readAsBytesSync();
+        final calculatedHash = sha256.convert(bytes).toString();
+        if (calculatedHash != fileEntry.sha256) {
+          corruptedFiles.add(fileEntry.path);
+          continue;
+        }
+
+        if (fileEntry.path.endsWith('.json')) {
+          try {
+            final content = utf8.decode(bytes);
+            jsonDecode(content);
+          } catch (_) {
+            corruptedFiles.add(fileEntry.path);
+          }
+        }
+      }
+
+      if (corruptedFiles.isNotEmpty) {
+        throw CorruptedBackupException(corruptedFiles);
+      }
+
+      // 4. Validasi versi & migrasi otomatis jika versi lama (PRD 6.7)
+      final dataDir = Directory(p.join(tempExtractDir.path, 'data'));
+      final extractedTonesFile = File(p.join(tempExtractDir.path, 'assets', 'tones.json'));
+      final runner = MigrationRunner(targetVersion: AppConstants.schemaVersion);
+      final migrationResult = await runner.migrateStartup(
+        notesDir: dataDir,
+        tonesFile: extractedTonesFile,
+      );
+      if (migrationResult.hasNewerSchemaVersion &&
+          migrationResult.maxDetectedVersion != null) {
+        throw NewerSchemaVersionException(
+          migrationResult.maxDetectedVersion!,
+          AppConstants.schemaVersion,
+        );
+      }
+
+      success = true;
+      return {
+        'manifest': manifest.toJson(),
+        'extractDirPath': tempExtractDir.path,
+      };
+    } finally {
+      if (!success) {
+        try {
+          tempExtractDir.deleteSync(recursive: true);
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// Validasi ZIP backup di isolate (compute): zip slip, manifest, checksum, JSON, migrasi.
+  /// Hasil dikembalikan sebagai [BackupInspectionResult] di isolate utama.
   Future<BackupInspectionResult> inspectBackup({
     required List<int> zipBytes,
     required Directory tempExtractDir,
   }) async {
-    if (tempExtractDir.existsSync()) {
-      tempExtractDir.deleteSync(recursive: true);
-    }
-    tempExtractDir.createSync(recursive: true);
-
-    final Archive archive;
-    try {
-      archive = ZipDecoder().decodeBytes(zipBytes);
-    } catch (e) {
-      throw InvalidBackupException('File ZIP rusak atau bukan format ZIP yang valid.');
-    }
-
-    // 1. Validasi Zip Slip (Path Berbahaya) & Ekstraksi
-    for (final file in archive) {
-      final name = file.name;
-      // Periksa path traversal
-      if (name.contains('..') ||
-          name.startsWith('/') ||
-          name.startsWith(r'\') ||
-          (name.length > 2 && name[1] == ':')) {
-        throw DangerousPathException(name);
-      }
-
-      final destPath = p.normalize(p.join(tempExtractDir.path, name));
-      if (!p.isWithin(tempExtractDir.path, destPath) && destPath != tempExtractDir.path) {
-        throw DangerousPathException(name);
-      }
-
-      if (file.isFile) {
-        final outFile = File(destPath);
-        outFile.parent.createSync(recursive: true);
-        outFile.writeAsBytesSync(file.content as List<int>);
-      } else {
-        Directory(destPath).createSync(recursive: true);
-      }
-    }
-
-    // 2. Validasi manifest.json
-    final manifestFile = File(p.join(tempExtractDir.path, 'manifest.json'));
-    if (!manifestFile.existsSync()) {
-      throw InvalidBackupException('manifest.json tidak ditemukan dalam file backup.');
-    }
-
-    final Map<String, dynamic> manifestMap;
-    try {
-      final text = manifestFile.readAsStringSync(encoding: utf8);
-      manifestMap = jsonDecode(text) as Map<String, dynamic>;
-    } catch (_) {
-      throw InvalidBackupException('manifest.json rusak dan tidak dapat di-parse.');
-    }
-
-    final fileSchemaVersion = manifestMap['schemaVersion'] as int? ?? 1;
-    if (fileSchemaVersion > AppConstants.schemaVersion) {
-      throw NewerSchemaVersionException(fileSchemaVersion, AppConstants.schemaVersion);
-    }
-
-    final manifest = BackupManifest.fromJson(manifestMap);
-
-    // 3. Validasi Checksum & Parse JSON
-    final corruptedFiles = <String>[];
-    for (final fileEntry in manifest.files) {
-      final fileOnDisk = File(p.join(tempExtractDir.path, fileEntry.path));
-      if (!fileOnDisk.existsSync()) {
-        corruptedFiles.add(fileEntry.path);
-        continue;
-      }
-
-      final bytes = fileOnDisk.readAsBytesSync();
-      final calculatedHash = sha256.convert(bytes).toString();
-      if (calculatedHash != fileEntry.sha256) {
-        corruptedFiles.add(fileEntry.path);
-        continue;
-      }
-
-      if (fileEntry.path.endsWith('.json')) {
-        try {
-          final content = utf8.decode(bytes);
-          jsonDecode(content);
-        } catch (_) {
-          corruptedFiles.add(fileEntry.path);
-        }
-      }
-    }
-
-    if (corruptedFiles.isNotEmpty) {
-      throw CorruptedBackupException(corruptedFiles);
-    }
-
-    // 4. Validasi versi & migrasi otomatis jika versi lama (PRD 6.7)
-    final dataDir = Directory(p.join(tempExtractDir.path, 'data'));
-    final extractedTonesFile = File(p.join(tempExtractDir.path, 'assets', 'tones.json'));
-    final runner = MigrationRunner(targetVersion: AppConstants.schemaVersion);
-    final migrationResult = await runner.migrateStartup(
-      notesDir: dataDir,
-      tonesFile: extractedTonesFile,
+    final params = _InspectBackupIsolateParams(
+      zipBytes: zipBytes,
+      tempExtractDirPath: tempExtractDir.path,
     );
-    if (migrationResult.hasNewerSchemaVersion &&
-        migrationResult.maxDetectedVersion != null) {
-      throw NewerSchemaVersionException(
-        migrationResult.maxDetectedVersion!,
-        AppConstants.schemaVersion,
-      );
-    }
-
+    final result = await compute(_inspectBackupIsolate, params);
+    final manifest = BackupManifest.fromJson(
+        result['manifest'] as Map<String, dynamic>);
     return BackupInspectionResult(
       manifest: manifest,
-      extractDirPath: tempExtractDir.path,
+      extractDirPath: result['extractDirPath'] as String,
     );
   }
 
@@ -346,7 +385,9 @@ class BackupService {
       if (tempSafetyDir.existsSync()) {
         try {
           tempSafetyDir.deleteSync(recursive: true);
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error(e, st);
+        }
       }
     }
 
@@ -486,7 +527,9 @@ class BackupService {
           if (content['id'] != null) {
             existingIds.add(content['id'] as String);
           }
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error(e, st);
+        }
       } else if (e is Directory) {
         final subMeta = File(p.join(e.path, '_folder.json'));
         if (subMeta.existsSync()) {
@@ -523,7 +566,9 @@ class BackupService {
             if (folderId != null && !targetOrder.contains(folderId)) {
               targetOrder.add(folderId);
             }
-          } catch (_) {}
+          } catch (e, st) {
+            AppLogger.error(e, st);
+          }
         }
       } else if (entity is File && entity.path.endsWith('.json')) {
         try {
@@ -593,7 +638,9 @@ class BackupService {
           if (!targetOrder.contains(fileId)) {
             targetOrder.add(fileId);
           }
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error(e, st);
+        }
       }
     }
 

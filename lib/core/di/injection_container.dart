@@ -236,5 +236,23 @@ Future<void> initDependencies({
   if (reconcileOnStart && !dataAccessMode.hasMigrationError) {
     await reminderSyncService.reconcileAllReminders();
   }
+
+  // Bersihkan folder sementara backup/import yang yatim dari sesi sebelumnya
+  await _cleanupOrphanBackupTempDirs();
 }
 
+/// Membersihkan folder sementara backup dan impor yang yatim dari sesi sebelumnya
+/// (tempSafetyDir dari executeReplaceAll dan tempExtractDir dari inspectBackup).
+Future<void> _cleanupOrphanBackupTempDirs() async {
+  final tempDir = Directory.systemTemp;
+  if (!await tempDir.exists()) return;
+  await for (final entity in tempDir.list(followLinks: false)) {
+    if (entity is! Directory) continue;
+    final name = p.basename(entity.path);
+    if (name == 'reminding_safety' || name.startsWith('reminding_import_')) {
+      try {
+        await entity.delete(recursive: true);
+      } catch (_) {}
+    }
+  }
+}

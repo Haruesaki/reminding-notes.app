@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import 'package:reminding/core/utils/app_logger.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/migration/data_access_mode.dart';
@@ -907,7 +908,8 @@ class LocalStorageDataSource {
             ? 'Beranda'
             : dir.replaceAll('/', ' / ');
         results.add(SearchResultItem(file: file, breadcrumb: breadcrumb));
-      } catch (_) {
+      } catch (e, st) {
+        AppLogger.error(e, st);
         // Lewati jika file tidak dapat dibaca
       }
     }
@@ -938,5 +940,13 @@ class LocalStorageDataSource {
     } catch (e, st) {
           AppLogger.error(e, st);
         }
+  }
+
+  /// Membuang semua penulisan tertunda (atomic write) agar tidak tersisa
+  /// future pending setelah siklus hidup tes atau widget berakhir.
+  Future<void> dispose() async {
+    try {
+      await AtomicFileWriter.waitForPendingWrites();
+    } catch (_) {}
   }
 }

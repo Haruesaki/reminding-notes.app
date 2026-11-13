@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 
@@ -56,7 +58,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final bytes = await pickedFile.readAsBytes();
 
     final tempExtractDirPath =
-        'reminding_import_${DateTime.now().millisecondsSinceEpoch}';
+        p.join(Directory.systemTemp.path, 'reminding_import_${DateTime.now().millisecondsSinceEpoch}');
 
     _backupBloc.add(BackupImportPickRequested(
       zipBytes: bytes,

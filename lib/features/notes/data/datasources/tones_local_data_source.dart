@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:path/path.dart' as p;
+import 'package:reminding/core/utils/app_logger.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../../core/migration/data_access_mode.dart';
@@ -118,7 +119,8 @@ class TonesLocalDataSource {
       return list
           .map((e) => ToneRefModel.fromJson(e as Map<String, dynamic>))
           .toList();
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.error(e, st);
       return [];
     }
   }
@@ -127,7 +129,8 @@ class TonesLocalDataSource {
     final list = await getTones();
     try {
       return list.firstWhere((t) => t.id == id);
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.error(e, st);
       return null;
     }
   }
@@ -316,7 +319,8 @@ class TonesLocalDataSource {
             relativePath: tone.relativePath,
             contentUri: uri ?? tone.contentUri,
           ));
-        } catch (_) {
+        } catch (e, st) {
+          AppLogger.error(e, st);
           updatedTones.add(tone);
         }
       } else {

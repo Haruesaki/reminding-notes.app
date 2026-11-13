@@ -19,7 +19,8 @@ class MediaStoreService {
         'title': title,
       });
       return uri;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.error(e, st);
       return null;
     }
   }

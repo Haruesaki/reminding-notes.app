@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:equatable/equatable.dart';
 import 'package:path/path.dart' as p;
+import 'package:reminding/core/utils/app_logger.dart';
 
 import '../../../../core/migration/data_access_mode.dart';
 import '../../../../core/migration/migration_runner.dart';
@@ -179,27 +180,10 @@ class NotesIndexManager {
 
   File get indexFile => File(p.join(supportDir.path, 'index.json'));
 
-  // --- In-memory index cache ---
+  // Penulisan indeks ke disk dilakukan langsung (atomik) pada setiap mutasi tunggal.
+  // Tidak ada timer debounce yang tersisa setelah siklus hidup tes/widget berakhir.
   AppIndexData? _cache;
   bool _cacheLoaded = false;
-
-  // Debounced persist: batch multiple rapid index mutations into a single disk
-  // write so the main isolate isn't blocked by repeated full index.json rewrites.
-  Timer? _persistDebounce;
-  static const Duration _persistDebounceDuration = Duration(milliseconds: 150);
-
-  /// Buang timer debounce dan paksa penulisan tertunda ke disk segera.
-  void dispose() {
-    _persistDebounce?.cancel();
-  }
-
-  /// Paksa tulis ulang cache terakhir ke disk segera (flush debounce).
-  Future<void> flushPendingWrites() async {
-    _persistDebounce?.cancel();
-    if (_cache != null) {
-      await saveIndex(_cache!);
-    }
-  }
 
   void _inspectSchemaVersion(Map<String, dynamic> map) {
     final version = (map['schemaVersion'] as num?)?.toInt() ?? 1;
@@ -237,7 +221,8 @@ class NotesIndexManager {
       _cache = data;
       _cacheLoaded = true;
       return data;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.error(e, st);
       // Jika corrupt atau rusak, kembalikan kosong agar dibangun ulang
       _cache = const AppIndexData();
       _cacheLoaded = true;
@@ -252,16 +237,14 @@ class NotesIndexManager {
     _cacheLoaded = true;
   }
 
-  /// Tulis indeks ke disk secara atomik. Penulisan diserialisasi oleh
-  /// [AtomicFileWriter], jadi tidak perlu antrean tambahan di sini.
-  /// Penulisan di-debounce agar banyak mutasi cepat tidak menimpa disk berulang kali.
+  /// Tulis indeks ke disk secara atomik pada setiap mutasi tunggal.
+  /// Penulisan diserialisasi oleh [AtomicFileWriter], jadi tidak perlu antrean
+  /// tambahan di sini. Tidak ada timer debounce, sehingga tidak tersisa timer
+  /// pending setelah siklus hidup tes atau widget berakhir.
   Future<void> _persistIndex(AppIndexData data) async {
     _cache = data;
     _cacheLoaded = true;
-    _persistDebounce?.cancel();
-    _persistDebounce = Timer(_persistDebounceDuration, () {
-      unawaited(saveIndex(data));
-    });
+    await saveIndex(data);
   }
 
   /// Upsert satu entri berkas ke indeks (create atau update).
@@ -488,7 +471,8 @@ class NotesIndexManager {
               colorIndex: colorIndex,
             ));
           }
-        } catch (_) {
+        } catch (e, st) {
+          AppLogger.error(e, st);
           // Abaikan file yang korup saat indeksasi
         }
       }

@@ -28,7 +28,7 @@ void main() {
   tearDown(() async {
     AtomicFileWriter.failBeforeRename = false;
     AtomicFileWriter.onBeforeRename = null;
-    await AtomicFileWriter.waitForPendingWrites();
+    await dataSource.dispose();
     if (tempDir.existsSync()) {
       try {
         tempDir.deleteSync(recursive: true);

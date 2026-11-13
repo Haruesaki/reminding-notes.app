@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:path/path.dart' as p;
+import 'package:reminding/core/utils/app_logger.dart';
 
 import '../../../../core/migration/data_access_mode.dart';
 import '../../../../core/utils/atomic_file_writer.dart';
@@ -326,7 +327,8 @@ class ReminderSyncServiceImpl implements ReminderSyncService {
         fileId = decoded['fileId'] as String?;
         taskId = decoded['taskId'] as String?;
       }
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.error(e, st);
       return null;
     }
 
