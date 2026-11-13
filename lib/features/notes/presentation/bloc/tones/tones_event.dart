@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:equatable/equatable.dart';
 import '../../../../explorer/domain/entities/tone_ref.dart';
 
@@ -14,13 +13,13 @@ class LoadTones extends TonesEvent {
 }
 
 class AddToneEvent extends TonesEvent {
-  final File file;
+  final String filePath;
   final String name;
 
-  const AddToneEvent({required this.file, required this.name});
+  const AddToneEvent({required this.filePath, required this.name});
 
   @override
-  List<Object?> get props => [file.path, name];
+  List<Object?> get props => [filePath, name];
 }
 
 class DeleteToneEvent extends TonesEvent {

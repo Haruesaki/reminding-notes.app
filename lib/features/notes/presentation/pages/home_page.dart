@@ -14,7 +14,7 @@ import '../bloc/note_list/note_list_state.dart';
 import '../cubit/copy_move_cubit.dart';
 import '../cubit/copy_move_state.dart';
 import '../cubit/deadline_calendar_cubit.dart';
-import '../../domain/services/file_share_service.dart';
+import '../../domain/repositories/text_share_service.dart';
 import '../widgets/balloon_fab_menu.dart';
 import '../widgets/category_filter_chips.dart';
 import '../widgets/date_selector_strip.dart';
@@ -227,7 +227,7 @@ class HomePage extends StatelessWidget {
       file: file,
       onShare: () async {
         try {
-          await FileShareService.shareFile(file);
+          await sl<TextShareService>().shareFile(file);
         } catch (e) {
           if (context.mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

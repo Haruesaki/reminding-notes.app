@@ -14,6 +14,7 @@ import '../../../explorer/data/datasources/notes_index_manager.dart';
 import '../../../notes/data/datasources/tones_local_data_source.dart';
 import '../../../notes/domain/services/reminder_sync_service.dart';
 import '../../domain/models/backup_exceptions.dart';
+import '../../domain/models/backup_inspection_result.dart';
 import '../../domain/models/backup_manifest.dart';
 
 class BackupParams {
@@ -31,16 +32,6 @@ class BackupParams {
     required this.appVersion,
     required this.schemaVersion,
     required this.backupFormat,
-  });
-}
-
-class BackupInspectionResult {
-  final BackupManifest manifest;
-  final Directory extractDir;
-
-  const BackupInspectionResult({
-    required this.manifest,
-    required this.extractDir,
   });
 }
 
@@ -274,7 +265,7 @@ class BackupService {
 
     return BackupInspectionResult(
       manifest: manifest,
-      extractDir: tempExtractDir,
+      extractDirPath: tempExtractDir.path,
     );
   }
 

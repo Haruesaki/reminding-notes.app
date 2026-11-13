@@ -18,6 +18,8 @@ import 'package:reminding/features/explorer/data/datasources/local_storage_data_
 import 'package:reminding/features/explorer/domain/entities/entities.dart';
 import 'package:reminding/features/explorer/domain/repositories/explorer_repository.dart';
 import 'package:reminding/features/notes/data/datasources/tones_local_data_source.dart';
+import 'package:reminding/features/notes/domain/repositories/tones_repository.dart';
+import 'package:reminding/features/notes/domain/usecases/tones_usecases.dart';
 import 'package:reminding/features/notes/data/services/notification_plugin_client.dart';
 import 'package:reminding/features/notes/domain/services/reminder_calculator.dart';
 import 'package:reminding/features/notes/domain/services/reminder_sync_service.dart';
@@ -547,7 +549,10 @@ void main() {
 
       // Hapus nada via TonesBloc -> notifikasi untuk file tersebut dijadwal ulang ke channel default
       final tonesBloc = TonesBloc(
+        tonesRepository: sl<TonesRepository>(),
         dataSource: sl<TonesLocalDataSource>(),
+        addToneUseCase: sl<AddToneUseCase>(),
+        deleteToneUseCase: sl<DeleteToneUseCase>(),
         reminderSyncService: sl<ReminderSyncService>(),
         audioPlayer: _FakeAudioPlayer(),
       );

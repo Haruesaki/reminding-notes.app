@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -743,16 +742,6 @@ class _TaskSettingsDialogState extends State<TaskSettingsDialog>
       final firstFile = pickedFiles.first;
       if (firstFile.path == null) return;
 
-      final file = File(firstFile.path!);
-      final size = await file.length();
-      if (size > 10 * 1024 * 1024) {
-        if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Ukuran file melebihi batas 10 MB.')),
-        );
-        return;
-      }
-
       if (!context.mounted) return;
       final defaultName = firstFile.name;
       final nameController = TextEditingController(text: defaultName);
@@ -781,7 +770,7 @@ class _TaskSettingsDialogState extends State<TaskSettingsDialog>
 
       if (confirmedName != null && confirmedName.isNotEmpty && context.mounted) {
         context.read<TonesBloc>().add(AddToneEvent(
-              file: file,
+              filePath: firstFile.path!,
               name: confirmedName,
             ));
       }

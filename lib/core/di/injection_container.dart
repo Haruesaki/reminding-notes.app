@@ -5,13 +5,20 @@ import 'package:path_provider/path_provider.dart';
 
 import '../migration/data_access_mode.dart';
 import '../migration/migration_runner.dart';
+import '../../features/backup/data/repositories/backup_repository_impl.dart';
 import '../../features/backup/data/services/backup_service.dart';
+import '../../features/backup/domain/repositories/backup_repository.dart';
+import '../../features/backup/domain/usecases/backup_usecases.dart';
+import '../../features/backup/presentation/bloc/backup_bloc.dart';
 import '../../features/explorer/data/datasources/local_storage_data_source.dart';
 import '../../features/explorer/data/datasources/notes_index_manager.dart';
 import '../../features/explorer/data/repositories/explorer_repository_impl.dart';
 import '../../features/explorer/domain/repositories/explorer_repository.dart';
 import '../../features/explorer/domain/usecases/explorer_usecases.dart';
 import '../../features/notes/data/datasources/tones_local_data_source.dart';
+import '../../features/notes/data/repositories/tones_repository_impl.dart';
+import '../../features/notes/domain/repositories/tones_repository.dart';
+import '../../features/notes/domain/usecases/tones_usecases.dart';
 import '../../features/notes/data/services/alarm_service.dart';
 import '../../features/notes/data/services/media_store_service.dart';
 import '../../features/notes/data/services/notification_plugin_client.dart';
@@ -19,7 +26,8 @@ import '../../features/notes/data/services/notification_service.dart';
 import '../../features/notes/data/services/permission_service.dart';
 import '../../features/notes/data/services/reminder_sync_service_impl.dart';
 import '../../features/notes/domain/services/reminder_sync_service.dart';
-import '../../features/notes/domain/services/file_share_service.dart';
+import '../../features/notes/data/repositories/text_share_service_impl.dart';
+import '../../features/notes/domain/repositories/text_share_service.dart';
 import '../../features/notes/presentation/bloc/list_editor/list_editor_bloc.dart';
 import '../../features/notes/presentation/bloc/note_editor/note_editor_bloc.dart';
 import '../../features/notes/presentation/bloc/note_list/note_list_bloc.dart';
@@ -88,7 +96,8 @@ Future<void> initDependencies({
     dataAccessMode: dataAccessMode,
   );
   await localDataSource.init();
-  await FileShareService.cleanupOrphanShareDirs();
+  sl.registerLazySingleton<TextShareService>(() => TextShareServiceImpl());
+  await sl<TextShareService>().cleanupOrphanShareDirs();
 
   final mediaStoreService = MediaStoreService();
   final tonesDataSource = TonesLocalDataSource(
@@ -120,10 +129,17 @@ Future<void> initDependencies({
   sl.registerSingleton<LocalStorageDataSource>(localDataSource);
   sl.registerSingleton<MediaStoreService>(mediaStoreService);
   sl.registerSingleton<TonesLocalDataSource>(tonesDataSource);
+  sl.registerLazySingleton<TonesRepository>(
+    () => TonesRepositoryImpl(sl<TonesLocalDataSource>()),
+  );
+  sl.registerLazySingleton<AddToneUseCase>(() => AddToneUseCase(sl<TonesRepository>()));
+  sl.registerLazySingleton<DeleteToneUseCase>(() => DeleteToneUseCase(sl<TonesRepository>()));
+
   sl.registerSingleton<NotificationService>(notificationService);
   sl.registerSingleton<ReminderSyncService>(reminderSyncService);
   sl.registerLazySingleton<AlarmService>(() => AlarmService());
   sl.registerLazySingleton<PermissionService>(() => PermissionService());
+  // Backup service (data level) + repository + use cases + bloc
   sl.registerLazySingleton<BackupService>(
     () => BackupService(
       dataAccessMode: sl<DataAccessMode>(),
@@ -132,6 +148,26 @@ Future<void> initDependencies({
       reminderSyncService: sl<ReminderSyncService>(),
     ),
   );
+  sl.registerLazySingleton<BackupRepository>(
+    () => BackupRepositoryImpl(
+      backupService: sl<BackupService>(),
+      dataAccessMode: sl<DataAccessMode>(),
+      indexManager: sl<NotesIndexManager>(),
+      tonesDataSource: sl<TonesLocalDataSource>(),
+      reminderSyncService: sl<ReminderSyncService>(),
+    ),
+  );
+  sl.registerLazySingleton<ExportBackup>(() => ExportBackup(sl<BackupRepository>()));
+  sl.registerLazySingleton<InspectBackup>(() => InspectBackup(sl<BackupRepository>()));
+  sl.registerLazySingleton<ImportBackup>(() => ImportBackup(sl<BackupRepository>()));
+  sl.registerFactory<BackupBloc>(() => BackupBloc(
+    exportBackup: sl<ExportBackup>(),
+    inspectBackup: sl<InspectBackup>(),
+    importBackup: sl<ImportBackup>(),
+    notesDirPath: notesDir.path,
+    assetsDirPath: assetsDir.path,
+    tempSafetyDirPath: p.join(Directory.systemTemp.path, 'reminding_safety'),
+  ));
   sl.registerSingleton<Directory>(notesDir, instanceName: 'notesDir');
   sl.registerSingleton<Directory>(assetsDir, instanceName: 'assetsDir');
   sl.registerSingleton<Directory>(supportDir, instanceName: 'supportDir');
@@ -178,7 +214,10 @@ Future<void> initDependencies({
   );
   sl.registerFactory<TonesBloc>(
     () => TonesBloc(
+      tonesRepository: sl<TonesRepository>(),
       dataSource: sl<TonesLocalDataSource>(),
+      addToneUseCase: sl<AddToneUseCase>(),
+      deleteToneUseCase: sl<DeleteToneUseCase>(),
       reminderSyncService: sl<ReminderSyncService>(),
     ),
   );

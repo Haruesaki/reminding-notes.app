@@ -5,7 +5,7 @@ import 'package:reminding/core/utils/name_sanitizer.dart';
 import 'package:reminding/features/explorer/data/datasources/local_storage_data_source.dart';
 import 'package:reminding/features/explorer/data/datasources/notes_index_manager.dart';
 import 'package:reminding/features/explorer/domain/entities/entities.dart';
-import 'package:reminding/features/notes/domain/services/file_share_service.dart';
+import 'package:reminding/features/notes/domain/services/share_text_builder.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -49,7 +49,7 @@ void main() {
         updatedAt: now,
       );
 
-      final textResult = FileShareService.formatAsPlainText(page);
+      final textResult = ShareTextBuilder.formatAsPlainText(page);
 
       expect(textResult, contains('Catatan Rapat'));
       expect(textResult, contains('Hasil rapat: tindak lanjuti sebelum akhir pekan.'));
@@ -88,7 +88,7 @@ void main() {
         updatedAt: now,
       );
 
-      final textResult = FileShareService.formatAsPlainText(listFile);
+      final textResult = ShareTextBuilder.formatAsPlainText(listFile);
 
       expect(textResult, contains('Daftar Belanja'));
       expect(textResult, contains('[ ] Bahan Pokok'));

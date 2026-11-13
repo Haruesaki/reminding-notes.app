@@ -1,22 +1,29 @@
 import 'dart:async';
-import 'dart:io';
+
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:path/path.dart' as p;
 
 import '../../../data/datasources/tones_local_data_source.dart';
+import '../../../domain/repositories/tones_repository.dart';
 import '../../../domain/services/reminder_sync_service.dart';
+import '../../../domain/usecases/tones_usecases.dart';
 import 'tones_event.dart';
 import 'tones_state.dart';
 
 class TonesBloc extends Bloc<TonesEvent, TonesState> {
-  final TonesLocalDataSource dataSource;
+  final TonesRepository tonesRepository;
   final ReminderSyncService? reminderSyncService;
+  final TonesLocalDataSource dataSource;
+  final AddToneUseCase addToneUseCase;
+  final DeleteToneUseCase deleteToneUseCase;
   final AudioPlayer _audioPlayer;
   StreamSubscription? _playerCompleteSub;
 
   TonesBloc({
+    required this.tonesRepository,
     required this.dataSource,
+    required this.addToneUseCase,
+    required this.deleteToneUseCase,
     this.reminderSyncService,
     AudioPlayer? audioPlayer,
   })  : _audioPlayer = audioPlayer ?? AudioPlayer(),
@@ -35,7 +42,7 @@ class TonesBloc extends Bloc<TonesEvent, TonesState> {
   Future<void> _onLoadTones(LoadTones event, Emitter<TonesState> emit) async {
     emit(state.copyWith(status: TonesStatus.loading));
     try {
-      final tones = await dataSource.getTones();
+      final tones = await tonesRepository.getTones();
       emit(state.copyWith(
         status: TonesStatus.loaded,
         tones: tones,
@@ -50,9 +57,8 @@ class TonesBloc extends Bloc<TonesEvent, TonesState> {
 
   Future<void> _onAddTone(AddToneEvent event, Emitter<TonesState> emit) async {
     try {
-      final newTone = await dataSource.addTone(
-        sourceFile: event.file,
-        name: event.name,
+      final newTone = await addToneUseCase(
+        AddToneParams(filePath: event.filePath, name: event.name),
       );
       final updated = List.of(state.tones)..add(newTone);
       emit(state.copyWith(
@@ -72,7 +78,7 @@ class TonesBloc extends Bloc<TonesEvent, TonesState> {
       if (state.playingToneId == event.toneId) {
         await _audioPlayer.stop();
       }
-      await dataSource.deleteTone(event.toneId);
+      await deleteToneUseCase(event.toneId);
       await reminderSyncService?.syncAfterToneDeleted(event.toneId);
       final updated = state.tones.where((t) => t.id != event.toneId).toList();
       emit(state.copyWith(
@@ -102,9 +108,8 @@ class TonesBloc extends Bloc<TonesEvent, TonesState> {
 
       await _audioPlayer.stop();
 
-      final fullPath = p.join(dataSource.assetsDir.path, event.tone.relativePath);
-      final file = File(fullPath);
-      if (file.existsSync()) {
+      final fullPath = '${dataSource.assetsDir.path}/${event.tone.relativePath}';
+      if (await tonesRepository.toneFileExists(event.tone.relativePath)) {
         await _audioPlayer.play(DeviceFileSource(fullPath));
         emit(state.copyWith(
           isPlaying: true,
