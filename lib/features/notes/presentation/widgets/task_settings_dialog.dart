@@ -5,10 +5,13 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/di/injection_container.dart';
 import '../../../../core/theme/app_colors.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../features/explorer/domain/entities/alarm_settings.dart';
 import '../../../../features/explorer/domain/entities/deadline_settings.dart';
 import '../../../../features/explorer/domain/entities/task.dart';
 import '../../../../features/explorer/domain/entities/tone_ref.dart';
+import '../../../notes/data/services/permission_service.dart';
+import '../../domain/services/alarm_permission_service.dart';
 import '../../domain/services/reminder_calculator.dart';
 import '../bloc/tones/tones_bloc.dart';
 import '../bloc/tones/tones_event.dart';
@@ -74,9 +77,15 @@ class _TaskSettingsDialogState extends State<TaskSettingsDialog>
   late TimeOfDay _alarmTime;
   String? _selectedAlarmToneId;
 
+  // Izin alarm presisi (PRD 8.4)
+  late final AlarmPermissionService _alarmPermissionService;
+  AlarmPermissionStatus? _alarmPermissionStatus;
+  bool _alarmPermissionChecked = false;
+
   @override
   void initState() {
     super.initState();
+    _alarmPermissionService = sl<AlarmPermissionService>();
     _tabController = TabController(length: 3, vsync: this);
 
     final dl = widget.task.deadline;
@@ -233,6 +242,12 @@ class _TaskSettingsDialogState extends State<TaskSettingsDialog>
             });
           },
         ),
+        // Info izin alarm presisi (PRD 8.4): hanya muncul saat deadline aktif
+        // dan izin alarm presisi belum diberikan.
+        if (_hasDeadline &&
+            _alarmPermissionStatus != null &&
+            _alarmPermissionStatus != AlarmPermissionStatus.granted)
+          _buildAlarmPermissionInfo(),
         if (_hasDeadline) ...[
           const SizedBox(height: 8),
           // Date & Time pickers
@@ -605,6 +620,12 @@ class _TaskSettingsDialogState extends State<TaskSettingsDialog>
   }
 
   void _onSave() {
+    // PRD 8.4: saat pertama kali menyimpan deadline, minta izin notifikasi
+    // lalu cek izin alarm presisi (fallback tidak-presisi bila ditolak).
+    if (_hasDeadline) {
+      _ensureAlarmPermissionRequested();
+    }
+
     final originalDl = widget.task.deadline;
     final originalAl = widget.task.alarm;
 
@@ -779,6 +800,97 @@ class _TaskSettingsDialogState extends State<TaskSettingsDialog>
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Gagal memilih file nada: $e')),
       );
+    }
+  }
+
+  /// Widget informasi izin alarm presisi dengan tombol menuju pengaturan sistem.
+  Widget _buildAlarmPermissionInfo() {
+    final status = _alarmPermissionStatus!;
+    String message;
+    String buttonLabel;
+    if (status == AlarmPermissionStatus.unavailable) {
+      message =
+          'Alarm presisi tidak didukung pada perangkat ini. Pengingat akan menggunakan jadwal tidak-presisi.';
+      buttonLabel = 'Buka pengaturan';
+    } else {
+      message =
+          'Izin alarm presisi belum diberikan. Pengingat deadline mungkin tidak tepat waktu. '
+          'Berikan izin agar pengingat berkali-karat berjalan tepat.';
+      buttonLabel = 'Berikan izin alarm';
+    }
+
+    return Card(
+      color: Colors.amber.shade50,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline, color: Colors.amber, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    message,
+                    style: const TextStyle(fontSize: 12, color: Colors.amber),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _openAlarmSettings,
+                child: Text(buttonLabel),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Buka pengaturan sistem untuk izin alarm presisi.
+  Future<void> _openAlarmSettings() async {
+    try {
+      await sl<PermissionService>().openSettings();
+    } catch (e, st) {
+      AppLogger.error(e, st);
+    }
+  }
+
+  /// Saat pertama kali menyimpan deadline: minta izin notifikasi, lalu cek
+  /// izin alarm presisi. Jika belum tersedia, tampilkan info di tab Deadline
+  /// dan gunakan penjadwalan tidak-presisi sebagai fallback.
+  Future<void> _ensureAlarmPermissionRequested() async {
+    if (_alarmPermissionChecked) return;
+    _alarmPermissionChecked = true;
+
+    try {
+      final notifGranted = await sl<PermissionService>().requestNotificationPermission();
+      if (!notifGranted && context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Izin notifikasi ditolak; pengingat mungkin tidak muncul.')),
+        );
+      }
+
+      final status = await sl<AlarmPermissionService>().alarmPermissionStatus();
+      if (mounted) {
+        setState(() {
+          _alarmPermissionStatus = status;
+        });
+      }
+    } catch (e, st) {
+      AppLogger.error(e, st);
+      if (mounted) {
+        setState(() {
+          _alarmPermissionStatus = AlarmPermissionStatus.denied;
+        });
+      }
     }
   }
 

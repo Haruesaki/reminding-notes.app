@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/services.dart';
 
+import '../../../../core/utils/app_logger.dart';
+
 class MediaStoreService {
   static const MethodChannel _channel = MethodChannel('com.example.reminding/media_store');
 
@@ -27,7 +29,9 @@ class MediaStoreService {
     if (!Platform.isAndroid) return;
     try {
       await _channel.invokeMethod('deleteTone', {'contentUri': contentUri});
-    } catch (_) {}
+    } catch (e, st) {
+          AppLogger.error(e, st);
+        }
   }
 
   /// Menghapus notification channel kustom
@@ -35,6 +39,8 @@ class MediaStoreService {
     if (!Platform.isAndroid) return;
     try {
       await _channel.invokeMethod('deleteNotificationChannel', {'channelId': channelId});
-    } catch (_) {}
+    } catch (e, st) {
+          AppLogger.error(e, st);
+        }
   }
 }

@@ -489,7 +489,7 @@ class _ListEditorViewState extends State<_ListEditorView>
                               IconButton(
                                 key: const Key('editor_copy_button'),
                                 icon: const Icon(
-                                  Icons.content_copy_rounded,
+                                  Icons.assignment_outlined,
                                   color: Color(0xFF111111),
                                   size: 22,
                                 ),

@@ -20,6 +20,8 @@ import '../../features/notes/data/repositories/tones_repository_impl.dart';
 import '../../features/notes/domain/repositories/tones_repository.dart';
 import '../../features/notes/domain/usecases/tones_usecases.dart';
 import '../../features/notes/data/services/alarm_service.dart';
+import '../../features/notes/data/services/alarm_permission_service_impl.dart';
+import '../../features/notes/domain/services/alarm_permission_service.dart';
 import '../../features/notes/data/services/media_store_service.dart';
 import '../../features/notes/data/services/notification_plugin_client.dart';
 import '../../features/notes/data/services/notification_service.dart';
@@ -139,6 +141,9 @@ Future<void> initDependencies({
   sl.registerSingleton<ReminderSyncService>(reminderSyncService);
   sl.registerLazySingleton<AlarmService>(() => AlarmService());
   sl.registerLazySingleton<PermissionService>(() => PermissionService());
+  sl.registerLazySingleton<AlarmPermissionService>(
+    () => AlarmPermissionServiceImpl(),
+  );
   // Backup service (data level) + repository + use cases + bloc
   sl.registerLazySingleton<BackupService>(
     () => BackupService(

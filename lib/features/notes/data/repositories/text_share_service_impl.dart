@@ -4,6 +4,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../../../core/utils/app_logger.dart';
+
 import 'package:reminding/core/utils/name_sanitizer.dart';
 import 'package:reminding/features/explorer/domain/entities/entities.dart';
 import 'package:reminding/features/notes/domain/repositories/text_share_service.dart';
@@ -20,7 +22,9 @@ class TextShareServiceImpl implements TextShareService {
       final dir = await _shareTempDir();
       if (!await dir.exists()) return;
       await dir.delete(recursive: true);
-    } catch (_) {}
+    } catch (e, st) {
+          AppLogger.error(e, st);
+        }
   }
 
   Future<Directory> _shareTempDir() async {
@@ -56,6 +60,8 @@ class TextShareServiceImpl implements TextShareService {
       if (await textFile.exists()) {
         await textFile.delete();
       }
-    } catch (_) {}
+    } catch (e, st) {
+          AppLogger.error(e, st);
+        }
   }
 }

@@ -8,6 +8,7 @@ import '../../../../core/migration/migration_runner.dart';
 import '../../../explorer/data/models/task_models.dart';
 import '../../../explorer/domain/entities/tone_ref.dart';
 import '../../../../core/utils/atomic_file_writer.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../services/media_store_service.dart';
 
 class ToneFileSizeLimitException implements Exception {
@@ -17,6 +18,16 @@ class ToneFileSizeLimitException implements Exception {
   @override
   String toString() =>
       'Ukuran file melebihi batas 10 MB (${(sizeInBytes / (1024 * 1024)).toStringAsFixed(2)} MB)';
+}
+
+/// Ekstensi file nada tidak didukung.
+class ToneFileFormatException implements Exception {
+  final String extension;
+  ToneFileFormatException(this.extension);
+
+  @override
+  String toString() =>
+      'Ekstensi file nada "$extension" tidak didukung. Gunakan .mp3, .m4a, .ogg, atau .wav.';
 }
 
 class TonesLocalDataSource {
@@ -78,7 +89,9 @@ class TonesLocalDataSource {
         if (map is Map<String, dynamic>) {
           _inspectSchemaVersion(map);
         }
-      } catch (_) {}
+      } catch (e, st) {
+          AppLogger.error(e, st);
+        }
     }
   }
 
@@ -129,12 +142,17 @@ class TonesLocalDataSource {
     await init();
 
     final size = await sourceFile.length();
-    // Batas 10 MB (10 * 1024 * 1024 bytes)
+    // Batas 10 MB (10 * 1024 * 1024 bytes) — sesuai PRD 7.6.
     if (size > 10 * 1024 * 1024) {
       throw ToneFileSizeLimitException(size);
     }
 
     final ext = p.extension(sourceFile.path).toLowerCase();
+    final validExtensions = ['.mp3', '.m4a', '.ogg', '.wav'];
+    if (!validExtensions.contains(ext)) {
+      throw ToneFileFormatException(ext);
+    }
+
     final toneId = _uuid.v4();
     final targetFileName = '$toneId$ext';
     final targetFile = File(p.join(tonesDir.path, targetFileName));
@@ -179,7 +197,9 @@ class TonesLocalDataSource {
     if (file.existsSync()) {
       try {
         file.deleteSync();
-      } catch (_) {}
+      } catch (e, st) {
+          AppLogger.error(e, st);
+        }
     }
 
     final updated = List<ToneRef>.from(currentTones)..removeAt(index);
@@ -217,7 +237,9 @@ class TonesLocalDataSource {
             }
           }
         }
-      } catch (_) {}
+      } catch (e, st) {
+          AppLogger.error(e, st);
+        }
     }
     return count;
   }
@@ -255,7 +277,9 @@ class TonesLocalDataSource {
             await _atomicWrite(file, content);
           }
         }
-      } catch (_) {}
+      } catch (e, st) {
+          AppLogger.error(e, st);
+        }
     }
   }
 

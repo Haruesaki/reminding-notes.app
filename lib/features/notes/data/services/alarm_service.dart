@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:android_intent_plus/android_intent.dart';
 
+import '../../../../core/utils/app_logger.dart';
+
 enum AlarmResult {
   success,
   unsupportedPlatform,
@@ -37,8 +39,9 @@ class AlarmService {
 
       await intent.launch();
       return AlarmResult.success;
-    } catch (_) {
-      return AlarmResult.failedNoClockApp;
+    } catch (e, st) {
+      AppLogger.error(e, st);
     }
+    return AlarmResult.failedNoClockApp;
   }
 }

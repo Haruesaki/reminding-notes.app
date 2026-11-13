@@ -2,8 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:reminding/core/di/injection_container.dart';
 import 'package:reminding/features/explorer/domain/entities/task.dart';
 import 'package:reminding/features/explorer/domain/entities/tone_ref.dart';
+import 'package:reminding/features/notes/data/services/alarm_permission_service_impl.dart';
+import 'package:reminding/features/notes/data/services/permission_service.dart';
+import 'package:reminding/features/notes/domain/services/alarm_permission_service.dart';
 import 'package:reminding/features/notes/presentation/bloc/tones/tones_bloc.dart';
 import 'package:reminding/features/notes/presentation/bloc/tones/tones_state.dart';
 import 'package:reminding/features/notes/presentation/widgets/task_settings_dialog.dart';
@@ -33,6 +37,14 @@ void main() {
 
   setUp(() {
     fakeTonesBloc = FakeTonesBloc();
+    if (!sl.isRegistered<AlarmPermissionService>()) {
+      sl.registerLazySingleton<AlarmPermissionService>(
+        () => FakeAlarmPermissionService(),
+      );
+    }
+    if (!sl.isRegistered<PermissionService>()) {
+      sl.registerLazySingleton<PermissionService>(() => PermissionService());
+    }
   });
 
   Widget buildTestWidget({required Task task}) {
@@ -133,4 +145,16 @@ void main() {
       );
     });
   });
+}
+
+class FakeAlarmPermissionService extends AlarmPermissionService {
+  @override
+  Future<bool> canScheduleExactAlarms() async => true;
+
+  @override
+  Future<bool> requestExactAlarmsPermission() async => true;
+
+  @override
+  Future<AlarmPermissionStatus> alarmPermissionStatus() async =>
+      AlarmPermissionStatus.granted;
 }

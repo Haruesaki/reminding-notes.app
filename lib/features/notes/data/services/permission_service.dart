@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../../../../core/utils/app_logger.dart';
+
 class PermissionService {
   /// Meminta izin notifikasi saat pengguna menyimpan deadline pertama kali (PRD 8.4)
   Future<bool> requestNotificationPermission() async {
@@ -14,7 +16,8 @@ class PermissionService {
       }
       final result = await Permission.notification.request();
       return result.isGranted;
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.error(e, st);
       return true;
     }
   }
@@ -23,7 +26,8 @@ class PermissionService {
   Future<bool> openSettings() async {
     try {
       return await openAppSettings();
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.error(e, st);
       return false;
     }
   }

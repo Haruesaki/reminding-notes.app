@@ -10,6 +10,7 @@ import '../../../../features/explorer/domain/entities/list_file.dart';
 import '../../../../features/explorer/domain/entities/task.dart';
 import '../../../../features/explorer/domain/entities/tone_ref.dart';
 import '../../domain/services/reminder_calculator.dart';
+import '../../../../core/utils/app_logger.dart';
 import 'notification_plugin_client.dart';
 
 class NotificationService {
@@ -73,7 +74,9 @@ class NotificationService {
       debugPrint('Timezone initialization fallback: $e');
       try {
         tz.setLocalLocation(tz.getLocation('UTC'));
-      } catch (_) {}
+      } catch (e, st) {
+          AppLogger.error(e, st);
+        }
       return 'UTC';
     }
   }
@@ -165,7 +168,9 @@ class NotificationService {
             if (data['taskId'] == taskId) {
               await _pluginClient.cancel(req.id);
             }
-          } catch (_) {}
+          } catch (e, st) {
+          AppLogger.error(e, st);
+        }
         }
       }
     } catch (e) {
@@ -184,7 +189,9 @@ class NotificationService {
             if (data['fileId'] == fileId) {
               await _pluginClient.cancel(req.id);
             }
-          } catch (_) {}
+          } catch (e, st) {
+          AppLogger.error(e, st);
+        }
         }
       }
     } catch (e) {

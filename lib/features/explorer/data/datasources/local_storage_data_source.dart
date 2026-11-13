@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../../../core/migration/data_access_mode.dart';
 import '../../../../core/migration/migration_runner.dart';
 import '../../../../core/utils/atomic_file_writer.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../../core/utils/display_order_sorter.dart';
 import '../../../../core/utils/name_sanitizer.dart';
 import '../../domain/entities/entities.dart';
@@ -148,7 +149,9 @@ class LocalStorageDataSource {
         try {
           final subFolder = await getFolder(relPath);
           entries.add(subFolder);
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error(e, st);
+        }
       } else if (entity is File && name.endsWith('.json')) {
         try {
           final content = entity.readAsStringSync(encoding: utf8);
@@ -160,7 +163,9 @@ class LocalStorageDataSource {
           } else if (type == 'list') {
             entries.add(ListFileModel.fromJson(map, relativePath: relPath));
           }
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error(e, st);
+        }
       }
     }
 
@@ -218,7 +223,9 @@ class LocalStorageDataSource {
               .replaceAll(r'\', '/');
           results.add(ListFileModel.fromJson(map, relativePath: relPath));
         }
-      } catch (_) {}
+      } catch (e, st) {
+          AppLogger.error(e, st);
+        }
     }
     return results;
   }
@@ -285,7 +292,9 @@ class LocalStorageDataSource {
       if (oldFileToDelete.existsSync()) {
         try {
           oldFileToDelete.deleteSync();
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error(e, st);
+        }
       }
     }
     await _ensureInOrder(folderRel, model.id);
@@ -370,7 +379,9 @@ class LocalStorageDataSource {
       if (oldFileToDelete.existsSync()) {
         try {
           oldFileToDelete.deleteSync();
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error(e, st);
+        }
       }
     }
     await _ensureInOrder(folderRel, model.id);
@@ -529,7 +540,9 @@ class LocalStorageDataSource {
         try {
           await file.rename(intermediate.path);
           await intermediate.rename(targetFile.path);
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error(e, st);
+        }
       }
       await _atomicWrite(targetFile, map);
     }
@@ -910,7 +923,9 @@ class LocalStorageDataSource {
         final newOrder = List<String>.from(folder.order)..add(id);
         await saveOrder(folderRelativePath: folderRel, newOrder: newOrder);
       }
-    } catch (_) {}
+    } catch (e, st) {
+          AppLogger.error(e, st);
+        }
   }
 
   Future<void> _removeFromOrder(String folderRel, String id) async {
@@ -920,6 +935,8 @@ class LocalStorageDataSource {
         final newOrder = List<String>.from(folder.order)..remove(id);
         await saveOrder(folderRelativePath: folderRel, newOrder: newOrder);
       }
-    } catch (_) {}
+    } catch (e, st) {
+          AppLogger.error(e, st);
+        }
   }
 }

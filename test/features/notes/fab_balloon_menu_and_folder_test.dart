@@ -7,7 +7,6 @@ import 'package:reminding/features/explorer/domain/entities/entities.dart';
 import 'package:reminding/features/explorer/domain/repositories/explorer_repository.dart';
 import 'package:reminding/features/notes/presentation/bloc/note_list/note_list_bloc.dart';
 import 'package:reminding/features/notes/presentation/bloc/note_list/note_list_event.dart';
-import 'package:reminding/features/notes/presentation/pages/editor_placeholder_page.dart';
 import 'package:reminding/features/notes/presentation/pages/home_page.dart';
 import 'package:reminding/features/notes/presentation/widgets/balloon_fab_menu.dart';
 import 'package:reminding/features/notes/presentation/widgets/date_selector_strip.dart';
@@ -221,67 +220,6 @@ void main() {
       expect(find.text('Folder Baru'), findsNothing);
       expect(find.byType(FolderTile), findsOneWidget);
       expect(find.text('Kuliah'), findsOneWidget);
-    });
-  });
-
-  group('M3 Placeholder Editor & Save Logic (PRD 7.4)', () {
-    testWidgets('EditorPlaceholderPage does not save if title and content are empty',
-        (tester) async {
-      final repo = sl<ExplorerRepository>();
-
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: EditorPlaceholderPage(fileType: 'Page'),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.text('Page Editor'), findsOneWidget);
-
-      // Tap back button
-      await tester.tap(find.byIcon(Icons.arrow_back));
-      await tester.pump();
-      await tester.runAsync(() async {
-        await Future.delayed(const Duration(milliseconds: 150));
-      });
-      await tester.pump(const Duration(milliseconds: 50));
-
-      // Check no file created in disk
-      final entries = await repo.getFolderContents('');
-      final files = entries.whereType<FileEntry>().toList();
-      expect(files.isEmpty, isTrue);
-    });
-
-    testWidgets('EditorPlaceholderPage saves file if content is non-empty',
-        (tester) async {
-      final repo = sl<ExplorerRepository>();
-
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: EditorPlaceholderPage(fileType: 'List'),
-        ),
-      );
-      await tester.pump();
-
-      // Enter content
-      await tester.enterText(find.byType(TextField).at(0), 'Belanja Mingguan');
-      await tester.enterText(find.byType(TextField).at(1), 'Telur\nSusu\nRoti');
-
-      // Tap Simpan
-      await tester.runAsync(() async {
-        await tester.tap(find.text('Simpan'));
-        await Future.delayed(const Duration(milliseconds: 300));
-      });
-      await tester.pumpAndSettle();
-
-      // Verify file created
-      List<NodeEntry> entries = [];
-      await tester.runAsync(() async {
-        entries = await repo.getFolderContents('');
-      });
-      final files = entries.whereType<FileEntry>().toList();
-      expect(files.length, equals(1));
-      expect(files.first.title, equals('Belanja Mingguan'));
     });
   });
 

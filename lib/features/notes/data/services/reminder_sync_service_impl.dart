@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 
 import '../../../../core/migration/data_access_mode.dart';
 import '../../../../core/utils/atomic_file_writer.dart';
+import '../../../../core/utils/app_logger.dart';
 import '../../../explorer/data/datasources/local_storage_data_source.dart';
 import '../../../explorer/data/datasources/notes_index_manager.dart';
 import '../../../explorer/domain/entities/entities.dart';
@@ -44,7 +45,9 @@ class ReminderSyncServiceImpl implements ReminderSyncService {
     if (await timezoneFile.exists()) {
       try {
         previousTz = (await timezoneFile.readAsString(encoding: utf8)).trim();
-      } catch (_) {}
+      } catch (e, st) {
+          AppLogger.error(e, st);
+        }
     }
 
     if (previousTz == null || previousTz.isEmpty) {
@@ -73,7 +76,9 @@ class ReminderSyncServiceImpl implements ReminderSyncService {
         try {
           final listFile = await localDataSource.readList(entry.relativePath);
           listFiles.add(listFile);
-        } catch (_) {}
+        } catch (e, st) {
+          AppLogger.error(e, st);
+        }
       }
     }
     return listFiles;

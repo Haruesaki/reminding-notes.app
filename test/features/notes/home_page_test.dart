@@ -9,7 +9,7 @@ import 'package:reminding/features/notes/presentation/bloc/note_list/note_list_b
 import 'package:reminding/features/notes/presentation/bloc/note_list/note_list_event.dart';
 import 'package:reminding/features/notes/presentation/bloc/note_list/note_list_state.dart';
 import 'package:reminding/features/notes/presentation/pages/home_page.dart';
-import 'package:reminding/features/notes/presentation/widgets/category_filter_chips.dart';
+import 'package:reminding/features/notes/presentation/widgets/entry_filter_chips.dart';
 import 'package:reminding/features/notes/presentation/widgets/folder_tile.dart';
 import 'package:reminding/features/notes/presentation/widgets/note_card.dart';
 import 'package:reminding/features/notes/presentation/widgets/notes_empty_state.dart';

@@ -16,7 +16,7 @@ import '../cubit/copy_move_state.dart';
 import '../cubit/deadline_calendar_cubit.dart';
 import '../../domain/repositories/text_share_service.dart';
 import '../widgets/balloon_fab_menu.dart';
-import '../widgets/category_filter_chips.dart';
+import '../widgets/entry_filter_chips.dart';
 import '../widgets/date_selector_strip.dart';
 import '../widgets/entry_context_menu.dart';
 import '../widgets/folder_tile.dart';
@@ -24,7 +24,6 @@ import '../widgets/home_header.dart';
 import '../widgets/note_card.dart';
 import '../widgets/notes_empty_state.dart';
 import '../widgets/reorderable_card_wrapper.dart';
-import 'editor_placeholder_page.dart';
 import 'list_editor_page.dart';
 import 'note_editor_page.dart';
 
@@ -359,16 +358,7 @@ class HomePage extends StatelessWidget {
       return;
     }
 
-    final saved = await Navigator.of(context).push<bool>(
-      MaterialPageRoute(
-        builder: (_) => EditorPlaceholderPage(
-          fileType: fileType,
-          folderRelativePath: folderRelativePath,
-        ),
-      ),
-    );
-
-    if (saved == true && context.mounted) {
+    if (context.mounted) {
       context.read<NoteListBloc>().add(LoadNotes(folderRelativePath: folderRelativePath));
     }
   }
