@@ -17,4 +17,5 @@ abstract class ExplorerRepository {
   Future<void> saveOrder({required String folderRelativePath, required List<String> newOrder});
   Future<List<DeadlineItem>> getAllDeadlines();
   Future<List<SearchResultItem>> searchGlobal(String query);
+  Future<FileEntry?> findFileEntryById(String id);
 }

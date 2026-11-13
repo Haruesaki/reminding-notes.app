@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:equatable/equatable.dart';
@@ -182,6 +183,24 @@ class NotesIndexManager {
   AppIndexData? _cache;
   bool _cacheLoaded = false;
 
+  // Debounced persist: batch multiple rapid index mutations into a single disk
+  // write so the main isolate isn't blocked by repeated full index.json rewrites.
+  Timer? _persistDebounce;
+  static const Duration _persistDebounceDuration = Duration(milliseconds: 150);
+
+  /// Buang timer debounce dan paksa penulisan tertunda ke disk segera.
+  void dispose() {
+    _persistDebounce?.cancel();
+  }
+
+  /// Paksa tulis ulang cache terakhir ke disk segera (flush debounce).
+  Future<void> flushPendingWrites() async {
+    _persistDebounce?.cancel();
+    if (_cache != null) {
+      await saveIndex(_cache!);
+    }
+  }
+
   void _inspectSchemaVersion(Map<String, dynamic> map) {
     final version = (map['schemaVersion'] as num?)?.toInt() ?? 1;
     if (version > MigrationRunner.currentSchemaVersion) {
@@ -235,15 +254,14 @@ class NotesIndexManager {
 
   /// Tulis indeks ke disk secara atomik. Penulisan diserialisasi oleh
   /// [AtomicFileWriter], jadi tidak perlu antrean tambahan di sini.
+  /// Penulisan di-debounce agar banyak mutasi cepat tidak menimpa disk berulang kali.
   Future<void> _persistIndex(AppIndexData data) async {
-    await saveIndex(data);
-  }
-
-  /// Tulis ulang indeks terakhir yang ada di cache ke disk.
-  Future<void> flushPendingWrites() async {
-    if (_cache != null) {
-      await saveIndex(_cache!);
-    }
+    _cache = data;
+    _cacheLoaded = true;
+    _persistDebounce?.cancel();
+    _persistDebounce = Timer(_persistDebounceDuration, () {
+      unawaited(saveIndex(data));
+    });
   }
 
   /// Upsert satu entri berkas ke indeks (create atau update).
@@ -387,8 +405,8 @@ class NotesIndexManager {
       return empty;
     }
 
-    final entities = notesDataDir.existsSync()
-        ? notesDataDir.listSync(recursive: true, followLinks: false)
+    final entities = await notesDataDir.exists()
+        ? await notesDataDir.list(recursive: true, followLinks: false).toList()
         : <FileSystemEntity>[];
     for (final entity in entities) {
       if (entity is File && entity.path.endsWith('.json')) {
@@ -398,7 +416,7 @@ class NotesIndexManager {
         }
         if (filename == '_folder.json') {
           try {
-            final content = entity.readAsStringSync(encoding: utf8);
+            final content = await entity.readAsString(encoding: utf8);
             final map = json.decode(content) as Map<String, dynamic>;
             _inspectSchemaVersion(map);
           } catch (_) {}
@@ -406,7 +424,7 @@ class NotesIndexManager {
         }
 
         try {
-          final content = entity.readAsStringSync(encoding: utf8);
+          final content = await entity.readAsString(encoding: utf8);
           final map = json.decode(content) as Map<String, dynamic>;
           _inspectSchemaVersion(map);
           final type = map['type'] as String? ?? 'page';

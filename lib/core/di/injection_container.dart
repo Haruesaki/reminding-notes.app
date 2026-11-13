@@ -19,6 +19,7 @@ import '../../features/notes/data/services/notification_service.dart';
 import '../../features/notes/data/services/permission_service.dart';
 import '../../features/notes/data/services/reminder_sync_service_impl.dart';
 import '../../features/notes/domain/services/reminder_sync_service.dart';
+import '../../features/notes/domain/services/file_share_service.dart';
 import '../../features/notes/presentation/bloc/list_editor/list_editor_bloc.dart';
 import '../../features/notes/presentation/bloc/note_editor/note_editor_bloc.dart';
 import '../../features/notes/presentation/bloc/note_list/note_list_bloc.dart';
@@ -87,6 +88,7 @@ Future<void> initDependencies({
     dataAccessMode: dataAccessMode,
   );
   await localDataSource.init();
+  await FileShareService.cleanupOrphanShareDirs();
 
   final mediaStoreService = MediaStoreService();
   final tonesDataSource = TonesLocalDataSource(

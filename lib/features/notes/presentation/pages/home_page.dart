@@ -870,7 +870,9 @@ class HomePage extends StatelessWidget {
                             ),
                           );
                         } else {
-                          await context.push('/note/${item.file.id}');
+                          await context.push(
+                            '/note/${item.file.id}?folder=${Uri.encodeComponent(folderRelativePath)}',
+                          );
                         }
                         if (context.mounted) {
                           try {
@@ -953,7 +955,9 @@ class HomePage extends StatelessWidget {
                           ),
                         );
                       } else {
-                        await context.push('/note/${row.item.file.id}');
+                        await context.push(
+                          '/note/${row.item.file.id}?folder=${Uri.encodeComponent(folderRelativePath)}',
+                        );
                       }
                       if (context.mounted) {
                         try {

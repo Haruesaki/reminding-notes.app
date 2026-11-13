@@ -48,13 +48,17 @@ class _RemindersPageState extends State<RemindersPage> {
 
   void _openFile(DeadlineItem item) {
     if (item.fileType == 'list') {
-      context.push('/list/${item.fileId}').then((_) {
+      context.push(
+        '/list/${item.fileId}?folder=${Uri.encodeComponent(item.fileRelativePath)}',
+      ).then((_) {
         if (mounted) {
           context.read<DeadlineCalendarCubit>().loadDeadlines();
         }
       });
     } else {
-      context.push('/note/${item.fileId}').then((_) {
+      context.push(
+        '/note/${item.fileId}?folder=${Uri.encodeComponent(item.fileRelativePath)}',
+      ).then((_) {
         if (mounted) {
           context.read<DeadlineCalendarCubit>().loadDeadlines();
         }

@@ -191,4 +191,14 @@ class ExplorerRepositoryImpl implements ExplorerRepository {
   Future<List<SearchResultItem>> searchGlobal(String query) {
     return localDataSource.searchGlobal(query);
   }
+
+  @override
+  Future<FileEntry?> findFileEntryById(String id) async {
+    final indexManager = localDataSource.indexManager;
+    if (indexManager == null) return null;
+    final data = await indexManager.loadIndex();
+    final matches = data.files.where((f) => f.id == id).toList();
+    if (matches.isEmpty) return null;
+    return localDataSource.readFile(matches.first.relativePath);
+  }
 }

@@ -479,7 +479,7 @@ class LocalStorageDataSource {
     await _atomicWrite(metaFile, FolderModel.fromEntity(updatedMeta).toJson());
 
     if (indexManager != null) {
-      await indexManager!.rebuildIndex(rootDir);
+      await indexManager!.moveSubtree(folderRelativePath, newRelPath);
     }
 
     return FolderModel.fromEntity(updatedMeta);
@@ -540,7 +540,7 @@ class LocalStorageDataSource {
         : ListFileModel.fromJson(map, relativePath: newRelPath);
 
     if (indexManager != null) {
-      await indexManager!.rebuildIndex(rootDir);
+      await indexManager!.moveEntry(fileRelativePath, newRelPath);
     }
 
     return result;
@@ -566,7 +566,11 @@ class LocalStorageDataSource {
     await _removeFromOrder(parentRel, entry.id);
 
     if (indexManager != null) {
-      await indexManager!.rebuildIndex(rootDir);
+      if (entry.isFolder) {
+        await indexManager!.removeSubtree(entry.relativePath);
+      } else {
+        await indexManager!.removeEntry(entry.relativePath);
+      }
     }
   }
 
@@ -685,7 +689,11 @@ class LocalStorageDataSource {
     await _ensureInOrder(destinationFolderRelativePath, entry.id);
 
     if (indexManager != null) {
-      await indexManager!.rebuildIndex(rootDir);
+      if (entry.isFolder) {
+        await indexManager!.moveSubtree(entry.relativePath, finalEntry.relativePath);
+      } else {
+        await indexManager!.moveEntry(entry.relativePath, finalEntry.relativePath);
+      }
     }
 
     return finalEntry;
@@ -729,7 +737,18 @@ class LocalStorageDataSource {
       final targetFile = _resolveFile(newRelPath);
       await _atomicWrite(targetFile, PageFileModel.fromEntity(copy).toJson());
       await _ensureInOrder(destinationFolderRelativePath, newId);
-      if (indexManager != null) await indexManager!.rebuildIndex(rootDir);
+      if (indexManager != null) {
+        await indexManager!.upsertEntry(IndexFileEntry(
+          id: copy.id,
+          relativePath: copy.relativePath,
+          type: 'page',
+          title: copy.title,
+          plainText: copy.plainText,
+          favoritedAt: copy.favoritedAt,
+          updatedAt: copy.updatedAt,
+          colorIndex: copy.colorIndex,
+        ));
+      }
       return copy;
     } else if (file is ListFile) {
       final newTasks = file.tasks.map((task) {
@@ -751,7 +770,18 @@ class LocalStorageDataSource {
       final targetFile = _resolveFile(newRelPath);
       await _atomicWrite(targetFile, ListFileModel.fromEntity(copy).toJson());
       await _ensureInOrder(destinationFolderRelativePath, newId);
-      if (indexManager != null) await indexManager!.rebuildIndex(rootDir);
+      if (indexManager != null) {
+        await indexManager!.upsertEntry(IndexFileEntry(
+          id: copy.id,
+          relativePath: copy.relativePath,
+          type: 'list',
+          title: copy.title,
+          plainText: copy.tasks.map((t) => t.text).join(' • '),
+          favoritedAt: copy.favoritedAt,
+          updatedAt: copy.updatedAt,
+          colorIndex: copy.colorIndex,
+        ));
+      }
       return copy;
     }
 
@@ -794,7 +824,20 @@ class LocalStorageDataSource {
     }
 
     if (indexManager != null) {
-      await indexManager!.rebuildIndex(rootDir);
+      final plainText = result is PageFile
+          ? result.plainText
+          : (result is ListFile ? result.tasks.map((t) => t.text).join(' • ') : '');
+      final type = result is ListFile ? 'list' : 'page';
+      await indexManager!.upsertEntry(IndexFileEntry(
+        id: result.id,
+        relativePath: result.relativePath,
+        type: type,
+        title: result.title,
+        plainText: plainText,
+        favoritedAt: result.favoritedAt,
+        updatedAt: result.updatedAt,
+        colorIndex: result.colorIndex,
+      ));
     }
 
     return result;
