@@ -10,7 +10,6 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../../core/widgets/read_only_mode_banner.dart';
 import '../../../backup/domain/repositories/backup_repository.dart';
-import '../../../backup/domain/usecases/backup_usecases.dart';
 import '../../../backup/presentation/bloc/backup_bloc.dart';
 import '../../../notes/presentation/bloc/note_list/note_list_bloc.dart';
 import '../../../notes/presentation/bloc/note_list/note_list_event.dart';

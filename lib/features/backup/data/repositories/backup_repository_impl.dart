@@ -23,16 +23,12 @@ class BackupRepositoryImpl implements BackupRepository {
   final ReminderSyncService? _reminderSyncService;
 
   BackupRepositoryImpl({
-    required BackupService backupService,
+    required this._backupService,
     DataAccessMode? dataAccessMode,
-    NotesIndexManager? indexManager,
-    TonesLocalDataSource? tonesDataSource,
-    ReminderSyncService? reminderSyncService,
-  })  : _backupService = backupService,
-        _dataAccessMode = dataAccessMode,
-        _indexManager = indexManager,
-        _tonesDataSource = tonesDataSource,
-        _reminderSyncService = reminderSyncService;
+    this._indexManager,
+    this._tonesDataSource,
+    this._reminderSyncService,
+  })  : _dataAccessMode = dataAccessMode;
 
   @override
   Future<Uint8List> exportBackup(ExportBackupParams params) async {
@@ -81,13 +77,13 @@ class BackupRepositoryImpl implements BackupRepository {
 
     // Pasca impor: rebuild indeks, daftar ulang nada, reschedule pengingat.
     if (_indexManager != null) {
-      await _indexManager!.rebuildIndex(notesDir);
+      await _indexManager.rebuildIndex(notesDir);
     }
     if (_tonesDataSource != null) {
-      await _tonesDataSource!.reRegisterAllTones();
+      await _tonesDataSource.reRegisterAllTones();
     }
     if (_reminderSyncService != null) {
-      await _reminderSyncService!.reconcileAllReminders(
+      await _reminderSyncService.reconcileAllReminders(
         forceRescheduleAll: true,
       );
     }

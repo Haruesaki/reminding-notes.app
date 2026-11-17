@@ -6,7 +6,6 @@ import 'package:share_plus/share_plus.dart';
 
 import '../../../../core/utils/app_logger.dart';
 
-import 'package:reminding/core/utils/name_sanitizer.dart';
 import 'package:reminding/features/explorer/domain/entities/entities.dart';
 import 'package:reminding/features/notes/domain/repositories/text_share_service.dart';
 import 'package:reminding/features/notes/domain/services/share_text_builder.dart';

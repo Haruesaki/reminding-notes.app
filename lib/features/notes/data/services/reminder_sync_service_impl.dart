@@ -6,7 +6,6 @@ import 'package:reminding/core/utils/app_logger.dart';
 
 import '../../../../core/migration/data_access_mode.dart';
 import '../../../../core/utils/atomic_file_writer.dart';
-import '../../../../core/utils/app_logger.dart';
 import '../../../explorer/data/datasources/local_storage_data_source.dart';
 import '../../../explorer/data/datasources/notes_index_manager.dart';
 import '../../../explorer/domain/entities/entities.dart';

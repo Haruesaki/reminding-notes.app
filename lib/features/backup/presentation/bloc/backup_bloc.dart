@@ -138,18 +138,13 @@ class BackupBloc extends Bloc<BackupEvent, BackupState> {
   BackupInspectionResult? _pendingInspection;
 
   BackupBloc({
-    required ExportBackup exportBackup,
+    required this._exportBackup,
     required InspectBackup inspectBackup,
-    required ImportBackup importBackup,
-    required String notesDirPath,
-    required String assetsDirPath,
-    required String tempSafetyDirPath,
-  })  : _exportBackup = exportBackup,
-        _inspectBackup = inspectBackup,
-        _importBackup = importBackup,
-        _notesDirPath = notesDirPath,
-        _assetsDirPath = assetsDirPath,
-        _tempSafetyDirPath = tempSafetyDirPath,
+    required this._importBackup,
+    required this._notesDirPath,
+    required this._assetsDirPath,
+    required this._tempSafetyDirPath,
+  })  : _inspectBackup = inspectBackup,
         super(const BackupState()) {
     on<BackupExportRequested>(_onExportRequested);
     on<BackupImportPickRequested>(_onImportPickRequested);

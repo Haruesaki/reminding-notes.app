@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reminding/core/di/injection_container.dart';
-import 'package:reminding/features/explorer/domain/entities/entities.dart';
 import 'package:reminding/features/explorer/domain/repositories/explorer_repository.dart';
 import 'package:reminding/features/notes/presentation/bloc/note_list/note_list_bloc.dart';
 import 'package:reminding/features/notes/presentation/bloc/note_list/note_list_event.dart';

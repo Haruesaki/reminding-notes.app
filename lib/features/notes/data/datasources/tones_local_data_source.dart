@@ -9,7 +9,6 @@ import '../../../../core/migration/migration_runner.dart';
 import '../../../explorer/data/models/task_models.dart';
 import '../../../explorer/domain/entities/tone_ref.dart';
 import '../../../../core/utils/atomic_file_writer.dart';
-import '../../../../core/utils/app_logger.dart';
 import '../services/media_store_service.dart';
 
 class ToneFileSizeLimitException implements Exception {

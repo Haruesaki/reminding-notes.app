@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_constants.dart';
 import '../../../../core/theme/app_colors.dart';
-import '../../../../core/theme/app_spacing.dart';
 import 'notes_search_bar.dart';
 
 /// Top bar for Home screen conforming to Figma 2:14 and PRD Section 7.1.
